@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>NSMicrophoneUsageDescription</key>
+  <string>AitoType 需要麦克风权限来录制语音并转换为文字。</string>
+  <key>NSAccessibilityUsageDescription</key>
+  <string>AitoType 需要辅助功能权限来将文字输入到其他应用。</string>
+</dict>
+</plist>

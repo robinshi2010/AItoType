@@ -1,0 +1,192 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AitoType</title>
+  <style>
+    /* Critical load styles to prevent FOUC */
+    body {
+      background: #000;
+      opacity: 0;
+      transition: opacity 0.5s;
+    }
+
+    body.loaded {
+      opacity: 1;
+    }
+  </style>
+  <link rel="stylesheet" href="styles.css">
+</head>
+
+<body class="theme-spatial">
+
+  <!-- Dynamic Background Layer -->
+  <div class="spatial-bg">
+    <div class="aurora-beam beam-1"></div>
+    <div class="aurora-beam beam-2"></div>
+    <div class="aurora-beam beam-3"></div>
+    <div class="star-field"></div>
+  </div>
+
+  <!-- Mouse Spotlight Effect -->
+  <div id="spotlight" class="spotlight-cursor"></div>
+
+  <!-- Main Spatial Container -->
+  <main class="spatial-stage">
+
+    <!-- View: Recorder -->
+    <section id="view-record" class="spatial-view active">
+
+      <!-- Spatial Core: The Living Orb -->
+      <div class="spatial-core-container">
+        <div id="status-pill" class="glass-pill">Ready</div>
+
+        <div class="orb-wrapper">
+          <button id="record-trigger" class="spatial-orb">
+            <div class="orb-internal-light"></div>
+            <div class="orb-processing-core"></div>
+            <div class="orb-surface-shine"></div>
+            <div class="mic-glyph">
+              <svg viewBox="0 0 24 24" fill="white">
+                <path d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.66 9 5v6c0 1.66 1.34 3 3 3z" />
+                <path
+                  d="M17 11c0 2.76-2.24 5-5 5s-5-2.24-5-5H5c0 3.53 2.61 6.43 6 6.92V21h2v-3.08c3.39-.49 6-3.39 6-6.92h-2z" />
+              </svg>
+            </div>
+            <div class="stop-glyph">
+              <div class="stop-square"></div>
+            </div>
+            <div class="process-glyph">
+              <div class="process-wave"></div>
+              <div class="process-wave"></div>
+              <div class="process-wave"></div>
+            </div>
+          </button>
+
+          <!-- Ripple Rings (Only visible when recording) -->
+          <div class="orb-ripple r1"></div>
+          <div class="orb-ripple r2"></div>
+        </div>
+
+        <p id="instruction-text" class="spatial-subtitle">Tap orb to capture</p>
+      </div>
+
+      <!-- Result Sheet (Slides up) -->
+      <div id="result-sheet" class="glass-sheet hidden">
+        <div class="sheet-header">
+          <span class="sheet-title">Transcript</span>
+          <div class="sheet-actions">
+            <button id="copy-btn" class="spatial-btn icon-only" title="Copy transcript" aria-label="Copy transcript">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+                <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+              </svg>
+            </button>
+            <button id="reset-result-btn" class="spatial-btn icon-only danger" title="Dismiss transcript" aria-label="Dismiss transcript">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <line x1="18" y1="6" x2="6" y2="18"></line>
+                <line x1="6" y1="6" x2="18" y2="18"></line>
+              </svg>
+            </button>
+          </div>
+        </div>
+        <div id="result-text" class="sheet-content"></div>
+      </div>
+    </section>
+
+    <!-- View: History -->
+    <section id="view-history" class="spatial-view">
+      <div class="glass-panel large">
+        <h1>History</h1>
+        <div id="history-container" class="scroll-container">
+          <!-- Filled by JS -->
+          <div class="empty-state">No recordings yet</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- View: Settings -->
+    <section id="view-settings" class="spatial-view">
+      <div class="glass-panel large">
+        <h1>Settings</h1>
+        <form id="settings-form">
+          <div class="form-section">
+            <div class="glass-toggle-row">
+              <span>Auto-Copy Result</span>
+              <label class="toggle-switch">
+                <input type="checkbox" id="auto-copy-switch">
+                <span class="slider"></span>
+              </label>
+            </div>
+          </div>
+
+          <div class="form-section">
+            <label>Global Shortcut</label>
+            <div id="shortcut-recorder" class="shortcut-recorder" role="button" tabindex="0" aria-label="Set global shortcut">
+              <span id="shortcut-label">Click to set shortcut</span>
+            </div>
+          </div>
+
+          <div class="form-section">
+            <label>Provider</label>
+            <div class="segmented-control glass">
+              <!-- Custom Select Placeholder -->
+              <select id="provider-select">
+                <option value="groq">Groq</option>
+                <option value="openai">OpenAI</option>
+                <option value="openrouter">OpenRouter</option>
+                <option value="aliyun">Aliyun</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="form-section">
+            <label>API Key</label>
+            <input type="password" id="api-key-input" class="spatial-input" placeholder="sk-...">
+          </div>
+
+          <div class="form-section" id="model-section">
+            <label>Model</label>
+            <input type="text" id="model-input" class="spatial-input" value="whisper-large-v3-turbo">
+          </div>
+
+          <div class="form-footer">
+            <span id="settings-status"></span>
+            <button type="submit" class="spatial-btn primary">Save Changes</button>
+          </div>
+        </form>
+      </div>
+    </section>
+
+  </main>
+
+  <!-- Bottom Ornament (Navigation) -->
+  <nav class="spatial-ornament">
+    <button class="ornament-tab active" data-view="view-record" title="Record">
+      <svg viewBox="0 0 24 24" fill="currentColor">
+        <path d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.66 9 5v6c0 1.66 1.34 3 3 3z" />
+        <path
+          d="M17 11c0 2.76-2.24 5-5 5s-5-2.24-5-5H5c0 3.53 2.61 6.43 6 6.92V21h2v-3.08c3.39-.49 6-3.39 6-6.92h-2z" />
+      </svg>
+    </button>
+    <button class="ornament-tab" data-view="view-history" title="History">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <path d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+      </svg>
+    </button>
+    <button class="ornament-tab" data-view="view-settings" title="Settings">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <circle cx="12" cy="12" r="3"></circle>
+        <path
+          d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z">
+        </path>
+      </svg>
+    </button>
+  </nav>
+
+  <script src="main.js"></script>
+</body>
+
+</html>

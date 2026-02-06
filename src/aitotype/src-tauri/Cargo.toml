@@ -1,0 +1,52 @@
+[package]
+name = "aitotype"
+version = "0.1.0"
+description = "A Tauri App"
+authors = ["you"]
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[lib]
+# The `_lib` suffix may seem redundant but it is necessary
+# to make the lib name unique and wouldn't conflict with the bin name.
+# This seems to be only an issue on Windows, see https://github.com/rust-lang/cargo/issues/8519
+name = "aitotype_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = ["tray-icon"] }
+tauri-plugin-opener = "2"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+
+# 音频录制
+cpal = "0.15"
+hound = "3.5"
+
+# 模拟键盘输入
+enigo = "0.2"
+
+# HTTP 请求 (用于 STT API)
+reqwest = { version = "0.12", features = ["json", "multipart"] }
+tokio = { version = "1", features = ["full"] }
+
+# 剪贴板
+arboard = "3"
+
+# 环境变量
+dotenv = "0.15"
+
+# Base64 编码 (用于 API 请求)
+base64 = "0.22"
+
+# 异步 trait
+async-trait = "0.1"
+
+# 全局状态
+lazy_static = "1.4"
+tauri-plugin-global-shortcut = "2.3.1"
+

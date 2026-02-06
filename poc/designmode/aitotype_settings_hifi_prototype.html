@@ -1,0 +1,355 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>AitoType 设置页高保真原型</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap"
+      rel="stylesheet"
+    />
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+      tailwind.config = {
+        theme: {
+          extend: {
+            colors: {
+              primary: '#3B82F6',
+              secondary: '#60A5FA',
+              cta: '#F97316',
+              basebg: '#F8FAFC',
+              textmain: '#1E293B'
+            },
+            fontFamily: {
+              sans: ['Inter', 'ui-sans-serif', 'system-ui', 'sans-serif']
+            },
+            boxShadow: {
+              panel: '0 12px 24px rgba(15, 23, 42, 0.08)',
+              soft: '0 6px 16px rgba(15, 23, 42, 0.06)'
+            }
+          }
+        }
+      };
+    </script>
+    <style>
+      :root {
+        --primary: #3b82f6;
+        --secondary: #60a5fa;
+        --cta: #f97316;
+        --bg: #f8fafc;
+        --text: #1e293b;
+      }
+
+      body {
+        background:
+          radial-gradient(circle at 8% 10%, rgba(96, 165, 250, 0.2), transparent 28%),
+          radial-gradient(circle at 92% 85%, rgba(59, 130, 246, 0.15), transparent 24%),
+          var(--bg);
+      }
+
+      .panel-transition {
+        transition: transform 200ms ease, opacity 200ms ease, box-shadow 200ms ease;
+      }
+
+      .panel-transition:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 12px 24px rgba(15, 23, 42, 0.1);
+      }
+
+      .focus-visible-ring:focus-visible {
+        outline: none;
+        box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.35);
+      }
+
+      .status-dot {
+        width: 10px;
+        height: 10px;
+        border-radius: 9999px;
+      }
+
+      @media (prefers-reduced-motion: reduce) {
+        .panel-transition,
+        .panel-transition:hover,
+        .status-anim,
+        .btn-anim {
+          transition: none !important;
+          transform: none !important;
+          animation: none !important;
+        }
+      }
+    </style>
+  </head>
+  <body class="min-h-screen font-sans text-textmain antialiased">
+    <a href="#main-content" class="sr-only focus:not-sr-only focus:absolute focus:left-4 focus:top-4 focus:z-50 focus:rounded-md focus:bg-white focus:px-3 focus:py-2 focus:text-sm focus:font-medium focus:shadow-soft">跳到主要内容</a>
+
+    <div class="mx-auto w-full max-w-5xl px-4 py-8 sm:px-6 lg:px-8">
+      <header class="panel-transition mb-6 rounded-2xl border border-slate-200 bg-white/95 p-6 shadow-panel">
+        <div class="flex flex-col gap-5 md:flex-row md:items-start md:justify-between">
+          <div>
+            <p class="mb-2 inline-flex items-center rounded-full border border-blue-200 bg-blue-50 px-3 py-1 text-xs font-semibold text-primary">
+              AitoType · 设置中心
+            </p>
+            <h1 class="text-2xl font-extrabold tracking-tight text-slate-900 md:text-3xl">语音输入配置（高保真原型）</h1>
+            <p class="mt-2 max-w-2xl text-sm leading-6 text-slate-700">
+              BYOK、多模型、开源透明。当前页面为静态原型，展示设置结构与状态反馈，不连接真实后端。
+            </p>
+          </div>
+          <div class="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm">
+            <p class="font-semibold text-slate-900">应用状态</p>
+            <div class="mt-2 flex items-center gap-2">
+              <span class="status-dot bg-emerald-500"></span>
+              <span class="font-medium text-slate-800">运行正常</span>
+            </div>
+            <p class="mt-2 text-slate-600">版本：v0.1.0-alpha</p>
+            <p class="text-slate-600">隐私：仅处理必要音频数据</p>
+            <a href="./aitotype_main_hifi_prototype.html" class="focus-visible-ring mt-3 inline-flex rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-800 transition duration-200 hover:border-slate-400 hover:bg-slate-100">打开主界面</a>
+          </div>
+        </div>
+      </header>
+
+      <main id="main-content" class="space-y-5">
+        <section class="panel-transition rounded-2xl border border-slate-200 bg-white p-6 shadow-soft" aria-labelledby="provider-title">
+          <div class="mb-4 flex items-center justify-between">
+            <h2 id="provider-title" class="text-lg font-bold text-slate-900">Provider 配置</h2>
+            <span class="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-700">必填项优先</span>
+          </div>
+
+          <div class="grid gap-4 md:grid-cols-2">
+            <div>
+              <label for="provider" class="mb-1 block text-sm font-semibold text-slate-800">Provider 类型 <span class="text-red-600" aria-hidden="true">*</span></label>
+              <select id="provider" class="focus-visible-ring w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-900">
+                <option value="openai">OpenAI</option>
+                <option value="groq" selected>Groq</option>
+                <option value="aliyun">Aliyun</option>
+                <option value="doubao">Doubao</option>
+                <option value="custom">Custom</option>
+              </select>
+            </div>
+
+            <div class="flex items-end">
+              <label class="inline-flex cursor-pointer items-center gap-2 rounded-xl border border-slate-300 bg-slate-50 px-3 py-2.5 text-sm font-medium text-slate-800">
+                <input id="enabled" type="checkbox" checked class="h-4 w-4 rounded border-slate-300 text-primary focus:ring-primary" />
+                启用当前 Provider
+              </label>
+            </div>
+
+            <div>
+              <label for="base-url" class="mb-1 block text-sm font-semibold text-slate-800">Base URL <span class="text-red-600" aria-hidden="true">*</span></label>
+              <input id="base-url" type="url" autocomplete="url" value="https://api.groq.com/openai/v1" class="focus-visible-ring w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm text-slate-900" />
+              <p class="mt-1 text-xs text-slate-600">支持 OpenAI 兼容接口与自定义 Endpoint。</p>
+            </div>
+
+            <div>
+              <label for="model" class="mb-1 block text-sm font-semibold text-slate-800">Model <span class="text-red-600" aria-hidden="true">*</span></label>
+              <input id="model" type="text" value="whisper-large-v3-turbo" class="focus-visible-ring w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm text-slate-900" />
+            </div>
+
+            <div class="md:col-span-2">
+              <label for="api-key" class="mb-1 block text-sm font-semibold text-slate-800">API Key <span class="text-red-600" aria-hidden="true">*</span></label>
+              <div class="flex flex-col gap-2 sm:flex-row">
+                <input id="api-key" type="password" autocomplete="off" placeholder="输入你的 API Key" class="focus-visible-ring w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm text-slate-900" />
+                <button id="toggle-key" type="button" class="btn-anim focus-visible-ring rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm font-semibold text-slate-800 transition duration-200 hover:border-slate-400 hover:bg-slate-50">显示</button>
+              </div>
+              <p id="api-key-error" class="mt-1 hidden text-xs font-medium text-red-600" role="alert">API Key 不能为空。</p>
+            </div>
+          </div>
+        </section>
+
+        <section class="panel-transition rounded-2xl border border-slate-200 bg-white p-6 shadow-soft" aria-labelledby="hotkey-title">
+          <h2 id="hotkey-title" class="mb-4 text-lg font-bold text-slate-900">快捷键设置</h2>
+          <div class="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+            <div>
+              <p class="text-sm text-slate-700">按住说话（Push-to-Talk）</p>
+              <div class="mt-2 inline-flex items-center gap-2 rounded-xl bg-slate-100 px-3 py-2 text-sm font-semibold text-slate-900">
+                <kbd class="rounded border border-slate-300 bg-white px-2 py-1">⌘</kbd>
+                <kbd class="rounded border border-slate-300 bg-white px-2 py-1">⇧</kbd>
+                <kbd class="rounded border border-slate-300 bg-white px-2 py-1">Space</kbd>
+              </div>
+            </div>
+            <button type="button" class="btn-anim focus-visible-ring cursor-pointer rounded-xl bg-primary px-4 py-2.5 text-sm font-semibold text-white transition duration-200 hover:bg-blue-600">
+              开始录制快捷键
+            </button>
+          </div>
+        </section>
+
+        <section class="panel-transition rounded-2xl border border-slate-200 bg-white p-6 shadow-soft" aria-labelledby="output-title">
+          <h2 id="output-title" class="mb-4 text-lg font-bold text-slate-900">输出方式</h2>
+          <fieldset>
+            <legend class="sr-only">选择输出方式</legend>
+            <div class="grid gap-3 md:grid-cols-2">
+              <label class="focus-within:ring-2 focus-within:ring-primary/40 cursor-pointer rounded-xl border border-primary bg-blue-50 px-4 py-3">
+                <div class="flex items-start gap-3">
+                  <input type="radio" name="output-mode" checked class="mt-1 h-4 w-4 border-slate-300 text-primary focus:ring-primary" />
+                  <div>
+                    <p class="text-sm font-semibold text-slate-900">模拟键盘输入（推荐）</p>
+                    <p class="text-xs text-slate-700">直接输入到当前激活应用，主流程最快。</p>
+                  </div>
+                </div>
+              </label>
+              <label class="focus-within:ring-2 focus-within:ring-primary/40 cursor-pointer rounded-xl border border-slate-300 bg-white px-4 py-3">
+                <div class="flex items-start gap-3">
+                  <input type="radio" name="output-mode" class="mt-1 h-4 w-4 border-slate-300 text-primary focus:ring-primary" />
+                  <div>
+                    <p class="text-sm font-semibold text-slate-900">剪贴板粘贴（备选）</p>
+                    <p class="text-xs text-slate-700">兼容性备选路径，失败时可手动粘贴。</p>
+                  </div>
+                </div>
+              </label>
+            </div>
+          </fieldset>
+        </section>
+
+        <section class="panel-transition rounded-2xl border border-slate-200 bg-white p-6 shadow-soft" aria-labelledby="connection-title">
+          <div class="mb-4 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+            <h2 id="connection-title" class="text-lg font-bold text-slate-900">连接测试</h2>
+            <p class="text-xs text-slate-600">状态模型：idle / testing / success / error</p>
+          </div>
+          <div class="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+            <div id="status-panel" class="status-anim rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm">
+              <p class="font-semibold text-slate-900">当前状态：<span id="status-text">Idle</span></p>
+              <p id="status-desc" class="mt-1 text-slate-700">尚未进行测试，请点击“测试连接”。</p>
+            </div>
+            <div class="flex gap-2">
+              <button id="test-connection" type="button" class="btn-anim focus-visible-ring cursor-pointer rounded-xl bg-cta px-4 py-2.5 text-sm font-semibold text-white transition duration-200 hover:bg-orange-600">测试连接</button>
+              <button id="reset-status" type="button" class="btn-anim focus-visible-ring cursor-pointer rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm font-semibold text-slate-800 transition duration-200 hover:border-slate-400 hover:bg-slate-50">重置状态</button>
+            </div>
+          </div>
+        </section>
+
+        <section class="panel-transition rounded-2xl border border-slate-200 bg-white p-6 shadow-soft" aria-labelledby="advanced-title">
+          <h2 id="advanced-title" class="mb-4 text-lg font-bold text-slate-900">高级选项</h2>
+          <div class="grid gap-4 md:grid-cols-2">
+            <div>
+              <label for="language" class="mb-1 block text-sm font-semibold text-slate-800">语言策略</label>
+              <select id="language" class="focus-visible-ring w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-900">
+                <option value="auto" selected>自动检测</option>
+                <option value="zh">中文优先</option>
+                <option value="en">英文优先</option>
+              </select>
+            </div>
+            <div class="flex flex-col justify-end gap-2">
+              <label class="inline-flex cursor-pointer items-center gap-2 text-sm text-slate-800">
+                <input type="checkbox" checked class="h-4 w-4 rounded border-slate-300 text-primary focus:ring-primary" />
+                自动标点
+              </label>
+              <label class="inline-flex cursor-pointer items-center gap-2 text-sm text-slate-800">
+                <input type="checkbox" class="h-4 w-4 rounded border-slate-300 text-primary focus:ring-primary" />
+                去填充词（Phase 2 占位）
+              </label>
+            </div>
+          </div>
+        </section>
+
+        <section class="panel-transition rounded-2xl border border-slate-200 bg-white p-6 shadow-soft" aria-label="底部操作区">
+          <div class="flex flex-wrap items-center gap-2">
+            <button id="save" type="button" class="btn-anim focus-visible-ring cursor-pointer rounded-xl bg-primary px-4 py-2.5 text-sm font-semibold text-white transition duration-200 hover:bg-blue-600">保存配置</button>
+            <button id="reset-form" type="button" class="btn-anim focus-visible-ring cursor-pointer rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm font-semibold text-slate-800 transition duration-200 hover:border-slate-400 hover:bg-slate-50">重置</button>
+            <button type="button" class="btn-anim focus-visible-ring cursor-pointer rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm font-semibold text-slate-800 transition duration-200 hover:border-slate-400 hover:bg-slate-50">导入（占位）</button>
+            <button type="button" class="btn-anim focus-visible-ring cursor-pointer rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm font-semibold text-slate-800 transition duration-200 hover:border-slate-400 hover:bg-slate-50">导出（占位）</button>
+          </div>
+          <p class="mt-3 text-xs text-slate-600">说明：本原型用于 UI/UX 验证，尚未接入 Tauri 后端与真实 API 调用。</p>
+        </section>
+      </main>
+    </div>
+
+    <script>
+      const statusPanel = document.getElementById('status-panel');
+      const statusText = document.getElementById('status-text');
+      const statusDesc = document.getElementById('status-desc');
+      const testBtn = document.getElementById('test-connection');
+      const resetStatusBtn = document.getElementById('reset-status');
+      const apiKeyInput = document.getElementById('api-key');
+      const apiKeyError = document.getElementById('api-key-error');
+      const toggleKeyBtn = document.getElementById('toggle-key');
+      const saveBtn = document.getElementById('save');
+      const resetFormBtn = document.getElementById('reset-form');
+
+      function setStatus(type) {
+        statusPanel.className = 'status-anim rounded-xl border px-4 py-3 text-sm';
+
+        if (type === 'idle') {
+          statusPanel.classList.add('border-slate-200', 'bg-slate-50');
+          statusText.textContent = 'Idle';
+          statusDesc.textContent = '尚未进行测试，请点击“测试连接”。';
+          return;
+        }
+
+        if (type === 'testing') {
+          statusPanel.classList.add('border-blue-200', 'bg-blue-50');
+          statusText.textContent = 'Testing';
+          statusDesc.textContent = '正在测试连接，请稍候...';
+          return;
+        }
+
+        if (type === 'success') {
+          statusPanel.classList.add('border-emerald-200', 'bg-emerald-50');
+          statusText.textContent = 'Success';
+          statusDesc.textContent = '连接成功：Provider 可用，已返回模拟转写结果。';
+          return;
+        }
+
+        statusPanel.classList.add('border-red-200', 'bg-red-50');
+        statusText.textContent = 'Error';
+        statusDesc.textContent = '连接失败：请检查 API Key、Base URL 与模型名称。';
+      }
+
+      function validateApiKey() {
+        const valid = apiKeyInput.value.trim().length > 0;
+        apiKeyError.classList.toggle('hidden', valid);
+        apiKeyInput.setAttribute('aria-invalid', String(!valid));
+        return valid;
+      }
+
+      toggleKeyBtn.addEventListener('click', () => {
+        const nextType = apiKeyInput.type === 'password' ? 'text' : 'password';
+        apiKeyInput.type = nextType;
+        toggleKeyBtn.textContent = nextType === 'password' ? '显示' : '隐藏';
+      });
+
+      testBtn.addEventListener('click', () => {
+        if (!validateApiKey()) {
+          setStatus('error');
+          return;
+        }
+
+        setStatus('testing');
+        testBtn.disabled = true;
+        testBtn.classList.add('opacity-70', 'cursor-not-allowed');
+
+        window.setTimeout(() => {
+          const provider = document.getElementById('provider').value;
+          setStatus(provider === 'custom' ? 'error' : 'success');
+          testBtn.disabled = false;
+          testBtn.classList.remove('opacity-70', 'cursor-not-allowed');
+        }, 1200);
+      });
+
+      resetStatusBtn.addEventListener('click', () => setStatus('idle'));
+
+      saveBtn.addEventListener('click', () => {
+        if (!validateApiKey()) {
+          setStatus('error');
+          return;
+        }
+        setStatus('success');
+        statusDesc.textContent = '配置已保存（原型行为，未写入真实存储）。';
+      });
+
+      resetFormBtn.addEventListener('click', () => {
+        document.getElementById('provider').value = 'groq';
+        document.getElementById('base-url').value = 'https://api.groq.com/openai/v1';
+        document.getElementById('model').value = 'whisper-large-v3-turbo';
+        document.getElementById('language').value = 'auto';
+        document.getElementById('enabled').checked = true;
+        apiKeyInput.value = '';
+        validateApiKey();
+        setStatus('idle');
+      });
+
+      apiKeyInput.addEventListener('blur', validateApiKey);
+      setStatus('idle');
+    </script>
+  </body>
+</html>

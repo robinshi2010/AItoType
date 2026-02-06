@@ -1,0 +1,24 @@
+# OS files
+.DS_Store
+Thumbs.db
+
+# Environments
+.env
+.env.*
+
+# Build and IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Dependencies
+node_modules/
+
+# Local data or temp files
+data/
+logs/
+*.log
+
+# Subprojects
+# poc/ # If you want to keep poc as a separate repo, you can ignore it or keep it as a submodule
