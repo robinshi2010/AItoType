@@ -12,6 +12,10 @@
 # Allow source tree
 !/src/**
 
+# Allow docs (for screenshots/README)
+!/docs/
+!/docs/**
+
 # Never track local secrets or machine-specific artifacts
 .env
 .env.*
