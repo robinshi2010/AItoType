@@ -4,17 +4,41 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>AitoType Overlay</title>
-  <link rel="stylesheet" href="overlay.css">
+  <style>
+    html, body {
+      margin: 0;
+      width: 100%;
+      height: 100%;
+      background: transparent;
+      overflow: hidden;
+    }
+  </style>
+  <link rel="stylesheet" href="overlay.css?v=20260206f">
 </head>
 <body>
   <main class="overlay-shell">
-    <div id="overlay-card" class="overlay-card recording">
-      <div class="ring"></div>
-      <div class="ring ring-2"></div>
-      <div class="core"></div>
-      <div id="status-text" class="status-text">Recording</div>
+    <div id="overlay-pill" class="overlay-pill recording">
+      <div class="pill-gloss"></div>
+      <div class="status-orb">
+        <div class="orb-light"></div>
+        <div class="orb-ring ring-1"></div>
+        <div class="orb-ring ring-2"></div>
+        <svg class="mic-icon" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+          <path d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.66 9 5v6c0 1.66 1.34 3 3 3z"></path>
+          <path d="M17 11c0 2.76-2.24 5-5 5s-5-2.24-5-5H5c0 3.52 2.61 6.43 6 6.92V21h2v-3.08c3.39-.49 6-3.39 6-6.92h-2z"></path>
+        </svg>
+        <div class="processing-icon">
+          <span></span>
+          <span></span>
+          <span></span>
+        </div>
+      </div>
+      <div class="status-copy">
+        <div id="status-text" class="status-text">Recording</div>
+        <div id="status-subtext" class="status-subtext">Listening...</div>
+      </div>
     </div>
   </main>
-  <script src="overlay.js"></script>
+  <script src="overlay.js?v=20260206f"></script>
 </body>
 </html>

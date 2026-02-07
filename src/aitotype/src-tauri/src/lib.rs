@@ -2,7 +2,7 @@
 //!
 //! 核心功能:
 //! - 录音 (audio 模块)
-//! - 语音识别 (stt 模块)
+//! - 语音识别 (stt 模块) - 使用 OpenRouter API
 //! - 键盘输入 (keyboard 模块)
 
 mod audio;
@@ -26,28 +26,13 @@ impl Default for AppState {
         dotenv::dotenv().ok();
         
         // 尝试从环境变量加载 API Key
-        let api_key = std::env::var("GROQ_API_KEY")
-            .or_else(|_| std::env::var("OPENROUTER_API_KEY"))
-            .or_else(|_| std::env::var("OPENAI_API_KEY"))
-            .unwrap_or_default();
-        
-        let (provider, base_url, model) = if std::env::var("GROQ_API_KEY").is_ok() {
-            let provider = "groq".to_string();
-            (provider.clone(), stt::default_base_url(&provider).to_string(), stt::default_model(&provider).to_string())
-        } else if std::env::var("OPENROUTER_API_KEY").is_ok() {
-            let provider = "openrouter".to_string();
-            (provider.clone(), stt::default_base_url(&provider).to_string(), stt::default_model(&provider).to_string())
-        } else {
-            let provider = "groq".to_string();
-            (provider.clone(), stt::default_base_url(&provider).to_string(), stt::default_model(&provider).to_string())
-        };
+        let api_key = std::env::var("OPENROUTER_API_KEY").unwrap_or_default();
         
         Self {
             stt_config: Mutex::new(SttConfig {
-                provider,
-                base_url,
+                base_url: stt::DEFAULT_BASE_URL.to_string(),
                 api_key,
-                model,
+                model: stt::DEFAULT_MODEL.to_string(),
             }),
         }
     }
@@ -140,16 +125,14 @@ fn get_stt_config(state: State<AppState>) -> Result<SttConfig, String> {
 /// 保存 STT 配置
 #[tauri::command]
 fn save_stt_config(config: SttConfig, state: State<AppState>) -> Result<(), String> {
-    let provider = config.provider.trim().to_lowercase();
     let mut normalized = config;
-    normalized.provider = provider.clone();
 
     if normalized.base_url.trim().is_empty() {
-        normalized.base_url = stt::default_base_url(&provider).to_string();
+        normalized.base_url = stt::DEFAULT_BASE_URL.to_string();
     }
 
     if normalized.model.trim().is_empty() {
-        normalized.model = stt::default_model(&provider).to_string();
+        normalized.model = stt::DEFAULT_MODEL.to_string();
     }
 
     let mut current = state.stt_config.lock()
@@ -169,8 +152,7 @@ async fn test_connection(state: State<'_, AppState>) -> Result<String, String> {
         return Err("API Key 不能为空".to_string());
     }
     
-    // 简单测试连接（后续可以改为真正的测试请求）
-    Ok(format!("连接测试成功 - Provider: {}, Model: {}", config.provider, config.model))
+    Ok(format!("连接测试成功 - Model: {}", config.model))
 }
 
 /// 更新全局快捷键
@@ -192,6 +174,15 @@ fn show_overlay_status(app: tauri::AppHandle, status: String) -> Result<(), Stri
     let overlay = app
         .get_webview_window("overlay")
         .ok_or_else(|| "overlay window not found".to_string())?;
+
+    if let (Ok(Some(monitor)), Ok(size)) = (overlay.current_monitor(), overlay.outer_size()) {
+        let monitor_pos = monitor.position();
+        let monitor_size = monitor.size();
+        let x = monitor_pos.x + ((monitor_size.width.saturating_sub(size.width)) / 2) as i32;
+        let y = (monitor_pos.y + (monitor_size.height as i32 - size.height as i32 - 96))
+            .max(monitor_pos.y);
+        let _ = overlay.set_position(tauri::Position::Physical(tauri::PhysicalPosition::new(x, y)));
+    }
 
     overlay.show().map_err(|e| e.to_string())?;
     overlay
@@ -232,6 +223,7 @@ pub fn run() {
 
             let _tray = TrayIconBuilder::new()
                 .icon(app.default_window_icon().unwrap().clone())
+                .icon_as_template(false)
                 .menu(&menu)
                 .show_menu_on_left_click(true)
                 .on_menu_event(|app, event| {
@@ -251,7 +243,7 @@ pub fn run() {
             // --- Global Shortcut (Alt+Space) ---
             #[cfg(desktop)]
             {
-                use tauri_plugin_global_shortcut::{ShortcutState};
+                use tauri_plugin_global_shortcut::ShortcutState;
                 use tauri::Emitter;
 
                 app.handle().plugin(
@@ -273,8 +265,6 @@ pub fn run() {
                         .build(),
                 )?;
             }
-
-
 
             Ok(())
         })

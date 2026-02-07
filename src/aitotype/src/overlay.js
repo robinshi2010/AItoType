@@ -1,13 +1,15 @@
 const { listen } = window.__TAURI__.event || { listen: async () => () => {} };
 
-const card = document.getElementById('overlay-card');
+const pill = document.getElementById('overlay-pill');
 const statusText = document.getElementById('status-text');
+const statusSubtext = document.getElementById('status-subtext');
 
 function setStatus(status) {
   const isTranscribing = status === 'transcribing';
-  card.classList.toggle('transcribing', isTranscribing);
-  card.classList.toggle('recording', !isTranscribing);
+  pill.classList.toggle('transcribing', isTranscribing);
+  pill.classList.toggle('recording', !isTranscribing);
   statusText.textContent = isTranscribing ? 'Transcribing' : 'Recording';
+  statusSubtext.textContent = isTranscribing ? 'Processing speech...' : 'Listening...';
 }
 
 async function init() {

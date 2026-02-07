@@ -16,7 +16,9 @@ const state = {
   shortcutUnlisten: null,
   shortcutCaptureActive: false,
   pendingShortcutContext: null,
-  backgroundSession: false
+  backgroundSession: false,
+  lastShortcutToggleAt: 0,
+  sttConfig: null
 };
 
 // ============ Elements ============
@@ -42,7 +44,6 @@ const el = {
   autoCopySwitch: document.getElementById('auto-copy-switch'),
 
   // Settings
-  providerSelect: document.getElementById('provider-select'),
   apiKeyInput: document.getElementById('api-key-input'),
   modelInput: document.getElementById('model-input'),
   settingsForm: document.getElementById('settings-form'),
@@ -139,6 +140,22 @@ async function copyResultToClipboard(text) {
   }
 }
 
+async function safeShowOverlayStatus(status) {
+  try {
+    await invoke('show_overlay_status', { status });
+  } catch (e) {
+    console.error('Show overlay failed', e);
+  }
+}
+
+async function safeHideOverlay() {
+  try {
+    await invoke('hide_overlay');
+  } catch (e) {
+    console.error('Hide overlay failed', e);
+  }
+}
+
 // ============ Recorder Logic ============
 async function toggleRecording() {
   if (state.status === 'transcribing') return;
@@ -148,7 +165,7 @@ async function toggleRecording() {
     try {
       updateStatus('transcribing');
       if (state.backgroundSession) {
-        await invoke('show_overlay_status', { status: 'transcribing' });
+        await safeShowOverlayStatus('transcribing');
       }
       const result = await invoke('stop_and_transcribe');
 
@@ -162,6 +179,7 @@ async function toggleRecording() {
 
       // Auto-paste back to the active app only for background shortcut sessions
       if (state.backgroundSession) {
+        await safeHideOverlay();
         try {
           await invoke('paste_text', { text: result });
         } catch (e) { console.error('Paste failed', e); }
@@ -170,14 +188,14 @@ async function toggleRecording() {
       updateStatus('success', result);
 
       if (state.backgroundSession) {
-        await invoke('hide_overlay');
+        await safeHideOverlay();
       }
       state.backgroundSession = false;
     } catch (e) {
       console.error(e);
       updateStatus('error', e.toString());
       if (state.backgroundSession) {
-        await invoke('hide_overlay');
+        await safeHideOverlay();
       }
       state.backgroundSession = false;
     }
@@ -193,12 +211,16 @@ async function toggleRecording() {
       updateStatus('recording');
 
       if (state.backgroundSession) {
-        await invoke('show_overlay_status', { status: 'recording' });
+        await safeShowOverlayStatus('recording');
       }
     } catch (e) {
+      // If anything fails after start attempt, try rollback to avoid stuck recording state.
+      try {
+        await invoke('stop_recording');
+      } catch (_) { }
       updateStatus('error', e.toString());
       if (state.backgroundSession) {
-        await invoke('hide_overlay');
+        await safeHideOverlay();
       }
       state.backgroundSession = false;
       state.pendingShortcutContext = null;
@@ -248,7 +270,7 @@ function renderHistory() {
 async function loadConfig() {
   try {
     const config = await invoke('get_stt_config');
-    if (config.provider) el.providerSelect.value = config.provider;
+    state.sttConfig = config;
     if (config.api_key) el.apiKeyInput.value = config.api_key;
     if (config.model) el.modelInput.value = config.model;
   } catch (e) { }
@@ -262,10 +284,9 @@ async function saveConfig(e) {
   }
 
   const config = {
-    provider: el.providerSelect.value,
     api_key: el.apiKeyInput.value,
     model: el.modelInput.value,
-    base_url: ''
+    base_url: state.sttConfig?.base_url || ''
   };
 
   try {
@@ -407,6 +428,9 @@ async function init() {
   if (listen) {
     state.shortcutUnlisten = await listen('toggle-recording-event', (event) => {
       if (state.shortcutCaptureActive) return;
+      const now = Date.now();
+      if (now - state.lastShortcutToggleAt < 450) return;
+      state.lastShortcutToggleAt = now;
       state.pendingShortcutContext = event?.payload || null;
       toggleRecording();
     });
