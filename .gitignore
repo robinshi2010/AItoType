@@ -1,24 +1,32 @@
-# OS files
-.DS_Store
-Thumbs.db
+# Keep repo open-source safe: track only source code and README by default.
 
-# Environments
+# Root allowlist
+/*
+!/.gitignore
+!/README.md
+!/src/
+
+# Allow source tree
+!/src/**
+
+# Never track local secrets or machine-specific artifacts
 .env
 .env.*
+**/.env
+**/.env.*
+*.pem
+*.key
 
-# Build and IDE
-.vscode/
-.idea/
-*.swp
-*.swo
+# Common generated files
+**/.DS_Store
+**/Thumbs.db
+**/node_modules/
+**/dist/
+**/build/
+**/target/
+**/logs/
+**/*.log
 
-# Dependencies
-node_modules/
-
-# Local data or temp files
-data/
-logs/
-*.log
-
-# Subprojects
-# poc/ # If you want to keep poc as a separate repo, you can ignore it or keep it as a submodule
+# IDE files
+**/.idea/
+**/.vscode/*
