@@ -7,6 +7,7 @@
     "frontendDist": "../src"
   },
   "app": {
+    "macOSPrivateApi": true,
     "withGlobalTauri": true,
     "windows": [
       {
@@ -26,8 +27,8 @@
         "title": "AitoType Overlay",
         "label": "overlay",
         "url": "overlay.html",
-        "width": 336,
-        "height": 72,
+        "width": 334,
+        "height": 86,
         "center": true,
         "resizable": false,
         "visible": false,

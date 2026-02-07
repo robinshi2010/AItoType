@@ -203,8 +203,14 @@ fn show_overlay_status(app: tauri::AppHandle, status: String) -> Result<(), Stri
         .get_webview_window("overlay")
         .ok_or_else(|| "overlay window not found".to_string())?;
 
-    const OVERLAY_WIDTH: u32 = 336;
-    const OVERLAY_HEIGHT: u32 = 72;
+    const OVERLAY_LOGICAL_WIDTH: f64 = 334.0;
+    const OVERLAY_LOGICAL_HEIGHT: f64 = 86.0;
+    const OVERLAY_BOTTOM_MARGIN: i32 = 280;
+
+    let _ = overlay.set_size(tauri::Size::Logical(tauri::LogicalSize::new(
+        OVERLAY_LOGICAL_WIDTH,
+        OVERLAY_LOGICAL_HEIGHT,
+    )));
 
     let monitor = app
         .get_webview_window("main")
@@ -214,11 +220,27 @@ fn show_overlay_status(app: tauri::AppHandle, status: String) -> Result<(), Stri
     if let Some(monitor) = monitor {
         let monitor_pos = monitor.position();
         let monitor_size = monitor.size();
-        let x = monitor_pos.x + ((monitor_size.width.saturating_sub(OVERLAY_WIDTH)) / 2) as i32;
-        let y = (monitor_pos.y + (monitor_size.height as i32 - OVERLAY_HEIGHT as i32 - 96))
+        let (overlay_width, overlay_height) = overlay
+            .outer_size()
+            .map(|size| (size.width, size.height))
+            .unwrap_or_else(|_| {
+                let scale = monitor.scale_factor();
+                (
+                    (OVERLAY_LOGICAL_WIDTH * scale).round() as u32,
+                    (OVERLAY_LOGICAL_HEIGHT * scale).round() as u32,
+                )
+            });
+        let x = monitor_pos.x + ((monitor_size.width.saturating_sub(overlay_width)) / 2) as i32;
+        let y = (monitor_pos.y
+            + (monitor_size.height as i32 - overlay_height as i32 - OVERLAY_BOTTOM_MARGIN))
             .max(monitor_pos.y);
         let _ = overlay.set_position(tauri::Position::Physical(tauri::PhysicalPosition::new(x, y)));
+    } else {
+        // 回退方案：如果当前拿不到显示器信息，至少保证窗口回到可见区域。
+        let _ = overlay.center();
     }
+
+    let _ = overlay.set_always_on_top(true);
 
     if let Err(e) = overlay.show() {
         eprintln!("show overlay failed: {:?}", e);
@@ -302,9 +324,7 @@ pub fn run() {
 
             // 预热 overlay 窗口，避免首次通过快捷键唤起时出现初始化卡顿。
             if let Some(overlay) = app.get_webview_window("overlay") {
-                let _ = overlay.set_position(tauri::Position::Physical(
-                    tauri::PhysicalPosition::new(-10000, -10000),
-                ));
+                let _ = overlay.set_size(tauri::Size::Logical(tauri::LogicalSize::new(334.0, 86.0)));
                 let _ = overlay.show();
                 let _ = overlay.hide();
             }

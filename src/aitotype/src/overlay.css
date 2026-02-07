@@ -13,7 +13,7 @@ body {
   height: 100%;
   margin: 0;
   padding: 0;
-  background: transparent;
+  background: rgba(0, 0, 0, 0) !important;
   overflow: hidden;
   font-family: -apple-system, BlinkMacSystemFont, "SF Pro Rounded", "SF Pro Display", sans-serif;
   color-scheme: dark;
@@ -26,7 +26,7 @@ body {
   align-items: center;
   justify-content: center;
   pointer-events: none;
-  background: transparent;
+  background: rgba(0, 0, 0, 0) !important;
   padding: 0;
   box-sizing: border-box;
 }
@@ -36,21 +36,18 @@ body {
   width: 334px;
   height: 70px;
   border-radius: 999px;
-  clip-path: inset(0 round 999px);
-  -webkit-mask-image: -webkit-radial-gradient(white, black);
+  overflow: visible;
   display: flex;
   align-items: center;
   gap: 14px;
-  padding: 8px 16px 8px 10px;
-  overflow: hidden;
+  padding: 7px 16px 7px 12px;
   background:
     radial-gradient(172px 88px at 20% 26%, rgba(24, 153, 255, 0.28), rgba(24, 153, 255, 0) 60%),
     radial-gradient(280px 180px at 84% 125%, rgba(14, 24, 39, 0.98), rgba(6, 10, 17, 0.96) 72%),
     linear-gradient(142deg, rgba(8, 16, 28, 0.98), rgba(4, 9, 15, 0.99));
   box-shadow:
     inset 0 -12px 26px rgba(0, 0, 0, 0.62),
-    0 10px 24px rgba(0, 0, 0, 0.52),
-    0 0 24px rgba(17, 163, 255, 0.24);
+    inset 0 0 0 1px rgba(99, 164, 234, 0.18);
   isolation: isolate;
 }
 
@@ -73,8 +70,8 @@ body {
 
 .status-orb {
   position: relative;
-  width: 56px;
-  height: 56px;
+  width: 54px;
+  height: 54px;
   border-radius: 999px;
   flex-shrink: 0;
   background: radial-gradient(circle at 36% 30%, rgba(180, 227, 255, 0.36), rgba(5, 11, 20, 0.97));
@@ -104,11 +101,11 @@ body {
 }
 
 .ring-1 {
-  inset: -4px;
+  inset: -3px;
 }
 
 .ring-2 {
-  inset: -9px;
+  inset: -6px;
 }
 
 .mic-icon {
