@@ -1,10 +1,10 @@
-# AitoType 🎙️
+# AItoType 🎙️
 
 <p align="center">
-  <img src="docs/screenshots/app-icon.png" alt="AitoType Icon" width="128" height="128" />
+  <img src="docs/screenshots/app-icon.png" alt="AItoType Icon" width="128" height="128" />
 </p>
 
-AitoType 是一个开源、免费的桌面端语音转文字工具，基于 **Tauri v2** 构建，旨在提供极致轻量、高效的语音输入体验。
+AItoType 是一个开源、免费的桌面端语音转文字工具，基于 **Tauri v2** 构建，旨在提供极致轻量、高效的语音输入体验。
 
 **核心理念**：免费开源、极简设计、高效生产力。
 
@@ -55,8 +55,8 @@ AitoType 是一个开源、免费的桌面端语音转文字工具，基于 **Ta
 
 ```bash
 # 1. 克隆项目
-git clone https://github.com/your-username/AitoType.git
-cd AitoType/src/aitotype
+git clone https://github.com/your-username/AItoType.git
+cd AItoType/src/aitotype
 
 # 2. 安装依赖
 npm install
@@ -86,8 +86,8 @@ npm run tauri build
 ### 下载安装
 
 1. 前往项目 GitHub Releases 页面下载最新 `.dmg`。
-2. 双击打开 `.dmg`，将 `AitoType.app` 拖入 `Applications`。
-3. 从“应用程序”中启动 AitoType。
+2. 双击打开 `.dmg`，将 `AItoType.app` 拖入 `Applications`。
+3. 从“应用程序”中启动 AItoType。
 
 ### 首次打开被 macOS 拦截时
 
@@ -99,7 +99,7 @@ npm run tauri build
 若仍被 Gatekeeper 拦截（仅限你确认来源可信时）：
 
 ```bash
-xattr -dr com.apple.quarantine /Applications/AitoType.app
+xattr -dr com.apple.quarantine /Applications/AItoType.app
 ```
 
 ## 🧱 打包与发布（给维护者）
@@ -201,14 +201,14 @@ git push origin v0.1.0
 ```bash
 codesign --force --deep --options runtime \
   --sign "Developer ID Application: YOUR_NAME (TEAM_ID)" \
-  "src/aitotype/src-tauri/target/release/bundle/macos/AitoType.app"
+  "src/aitotype/src-tauri/target/release/bundle/macos/AItoType.app"
 ```
 
 ### 3) 提交公证并等待结果（示例）
 
 ```bash
 xcrun notarytool submit \
-  "src/aitotype/src-tauri/target/release/bundle/dmg/AitoType_0.1.0_x64.dmg" \
+  "src/aitotype/src-tauri/target/release/bundle/dmg/AItoType_0.1.0_x64.dmg" \
   --apple-id "YOUR_APPLE_ID" \
   --team-id "YOUR_TEAM_ID" \
   --password "YOUR_APP_SPECIFIC_PASSWORD" \
@@ -218,14 +218,14 @@ xcrun notarytool submit \
 ### 4) 装订公证票据（Staple）
 
 ```bash
-xcrun stapler staple "src/aitotype/src-tauri/target/release/bundle/dmg/AitoType_0.1.0_x64.dmg"
+xcrun stapler staple "src/aitotype/src-tauri/target/release/bundle/dmg/AItoType_0.1.0_x64.dmg"
 ```
 
 ### 5) 发布前自检
 
 ```bash
-spctl -a -vv "src/aitotype/src-tauri/target/release/bundle/macos/AitoType.app"
-codesign --verify --deep --strict --verbose=2 "src/aitotype/src-tauri/target/release/bundle/macos/AitoType.app"
+spctl -a -vv "src/aitotype/src-tauri/target/release/bundle/macos/AItoType.app"
+codesign --verify --deep --strict --verbose=2 "src/aitotype/src-tauri/target/release/bundle/macos/AItoType.app"
 ```
 
 ## ⚙️ 配置指南

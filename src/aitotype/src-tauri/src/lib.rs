@@ -1,4 +1,4 @@
-//! AitoType - macOS 语音转文字工具
+//! AItoType - macOS 语音转文字工具
 //!
 //! 核心功能:
 //! - 录音 (audio 模块)
@@ -299,7 +299,7 @@ pub fn run() {
             use tauri::menu::{Menu, MenuItem};
             use tauri::tray::TrayIconBuilder;
 
-            let quit_i = MenuItem::with_id(app, "quit", "Quit AitoType", true, None::<&str>)?;
+            let quit_i = MenuItem::with_id(app, "quit", "Quit AItoType", true, None::<&str>)?;
             let show_i = MenuItem::with_id(app, "show", "Show Window", true, None::<&str>)?;
             let menu = Menu::with_items(app, &[&show_i, &quit_i])?;
 

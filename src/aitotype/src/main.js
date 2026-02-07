@@ -1,5 +1,5 @@
 /**
- * AitoType Spatial Controller
+ * AItoType Spatial Controller
  * "Glass Monolith" Edition
  */
 

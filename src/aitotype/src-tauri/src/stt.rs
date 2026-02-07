@@ -108,7 +108,7 @@ async fn transcribe_with_model(audio_base64: &str, config: &SttConfig, model: &s
         .header("Authorization", format!("Bearer {}", config.api_key))
         .header("Content-Type", "application/json")
         .header("HTTP-Referer", "https://github.com/aitotype")
-        .header("X-Title", "AitoType")
+        .header("X-Title", "AItoType")
         .json(&request_body)
         .send()
         .await
