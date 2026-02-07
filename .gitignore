@@ -4,6 +4,8 @@
 /*
 !/.gitignore
 !/README.md
+!/.github/
+!/.github/**
 !/src/
 
 # Allow source tree
