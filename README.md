@@ -79,7 +79,7 @@ npm run tauri build
 
 1. `npm run dev`：启动开发模式
 2. `npm run build`：本机打包当前平台
-3. `npm run build:ci`：CI 模式打包（用于 GitHub Actions）
+3. `npm run build:ci`：用于 GitHub Actions 的非交互打包命令
 
 ## 📦 下载与安装（给普通用户）
 
