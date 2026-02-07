@@ -92,8 +92,15 @@ async fn stop_and_transcribe(state: State<'_, AppState>) -> Result<String, Strin
     let config = state.stt_config.lock()
         .map_err(|e| format!("获取配置失败: {:?}", e))?
         .clone();
-    
-    stt::transcribe(&file_path, &config).await
+
+    let transcribe_result = stt::transcribe(&file_path, &config).await;
+
+    // 清理临时录音文件，避免在 /tmp 持续堆积。
+    if let Err(e) = std::fs::remove_file(&file_path) {
+        eprintln!("清理临时录音文件失败 {}: {:?}", file_path, e);
+    }
+
+    transcribe_result
 }
 
 /// 模拟键盘输入
@@ -124,7 +131,7 @@ fn get_stt_config(state: State<AppState>) -> Result<SttConfig, String> {
 
 /// 保存 STT 配置
 #[tauri::command]
-fn save_stt_config(config: SttConfig, state: State<AppState>) -> Result<(), String> {
+fn save_stt_config(app: tauri::AppHandle, config: SttConfig, state: State<AppState>) -> Result<(), String> {
     let mut normalized = config;
 
     if normalized.base_url.trim().is_empty() {
@@ -135,9 +142,30 @@ fn save_stt_config(config: SttConfig, state: State<AppState>) -> Result<(), Stri
         normalized.model = stt::DEFAULT_MODEL.to_string();
     }
 
-    let mut current = state.stt_config.lock()
-        .map_err(|e| format!("获取配置失败: {:?}", e))?;
-    *current = normalized;
+    // 更新内存状态
+    {
+        let mut current = state.stt_config.lock()
+            .map_err(|e| format!("获取配置失败: {:?}", e))?;
+        *current = normalized.clone();
+    }
+
+    // 持久化到磁盘
+    use tauri::Manager;
+    if let Ok(path) = app.path().app_config_dir() {
+        let config_path = path.join("config.json");
+        // 确保目录存在
+        if let Some(parent) = config_path.parent() {
+            let _ = std::fs::create_dir_all(parent);
+        }
+        
+        if let Ok(json) = serde_json::to_string_pretty(&normalized) {
+            if let Err(e) = std::fs::write(&config_path, json) {
+                eprintln!("保存配置失败: {:?}", e);
+                return Err(format!("保存配置失败: {}", e));
+            }
+        }
+    }
+
     Ok(())
 }
 
@@ -212,10 +240,26 @@ pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .setup(|app| {
+            // --- 加载持久化配置 ---
+            use tauri::Manager;
+            if let Ok(path) = app.path().app_config_dir() {
+                let config_path = path.join("config.json");
+                if config_path.exists() {
+                    if let Ok(content) = std::fs::read_to_string(&config_path) {
+                        if let Ok(saved_config) = serde_json::from_str::<SttConfig>(&content) {
+                             let state = app.state::<AppState>();
+                             if let Ok(mut guard) = state.stt_config.lock() {
+                                 *guard = saved_config;
+                                 println!("✅ 已加载配置文件: {:?}", config_path);
+                             };
+                        }
+                    }
+                }
+            }
+
             // --- System Tray ---
             use tauri::menu::{Menu, MenuItem};
             use tauri::tray::TrayIconBuilder;
-            use tauri::Manager;
 
             let quit_i = MenuItem::with_id(app, "quit", "Quit AitoType", true, None::<&str>)?;
             let show_i = MenuItem::with_id(app, "show", "Show Window", true, None::<&str>)?;

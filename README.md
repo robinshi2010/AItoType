@@ -1,180 +1,123 @@
-# AitoType
+# AitoType 🎙️
 
 <p align="center">
   <img src="docs/screenshots/app-icon.png" alt="AitoType Icon" width="128" height="128" />
 </p>
 
-AitoType 是一个基于 Tauri 的桌面语音转文字工具（当前主要面向 macOS），支持全局快捷键录音、实时状态悬浮提示、识别后自动粘贴回当前输入框。
+AitoType 是一个开源、免费的桌面端语音转文字工具，基于 **Tauri v2** 构建，旨在提供极致轻量、高效的语音输入体验。
 
-## 功能特性
+**核心理念**：免费开源、极简设计、高效生产力。
 
-- 全局快捷键录音（默认 `Alt+Space`，可在设置里自定义）
-- 二段式操作：
-  - 第一次触发：开始录音
-  - 第二次触发：停止录音并发起识别
-- 后台触发时显示底部悬浮状态条（录制中 / 识别中）
-- 识别完成后自动粘贴到当前应用输入框（适合 chatbox 场景）
-- 可选自动复制识别结果到系统剪贴板
-- 历史记录查看
-- 托盘常驻（可从托盘重新打开窗口）
+> ⚠️ **声明**：本项目完全开源免费，供大家学习与使用。**严禁用于任何商业盈利行为**。
 
-## 截图
+---
 
-> 你可以后续把截图放到 `docs/screenshots/`，并替换下面占位。
+## 📸 界面预览
 
-- 主界面（录音状态）  
-  `docs/screenshots/main-record.png`
-- 后台悬浮条（录制中）  
-  `docs/screenshots/overlay-recording.png`
-- 后台悬浮条（识别中）  
-  `docs/screenshots/overlay-transcribing.png`
-- 设置页（快捷键 / API Key / Model）  
-  `docs/screenshots/settings.png`
+<p align="center">
+  <img src="docs/screenshots/main.png" alt="主界面 - 极简悬浮球" width="45%" border="1" />
+  <img src="docs/screenshots/setting.png" alt="设置页 - 自定义模型与快捷键" width="45%" border="1" />
+</p>
 
-示例 Markdown（补图后直接取消注释）：
+## ✨ 功能特性
 
-```md
-<!--
-![Main](docs/screenshots/main-record.png)
-![Overlay Recording](docs/screenshots/overlay-recording.png)
-![Overlay Transcribing](docs/screenshots/overlay-transcribing.png)
-![Settings](docs/screenshots/settings.png)
--->
-```
+- **全局快捷键唤起**：默认 `Alt+Space` 一键录音，再次按下即可停止并识别。
+- **无缝嵌入工作流**：
+  - **自动粘贴**：识别完成后，结果自动“打字”到你当前光标所在的输入框（Chatbox、文档、编辑器等）。
+  - **自动复制**：可选自动复制结果到剪贴板。
+- **极致 UI 设计**：
+   - "Glass Monolith" 玻璃拟态设计风格。
+   - 沉浸式动效与交互反馈。
+   - **后台悬浮条**：在后台录音时，屏幕底部显示灵动胶囊状态条，不干扰视线。
+- **灵活的模型支持**：
+   - 内置 **OpenRouter** 支持。
+   - 默认配置 **Gemini 3.0 Flash**（速度快、精度高、免费额度充裕）。
+   - 可自定义 API Key 和 Model（如 GPT-4o, Claude 3.5 Sonnet 等）。
+- **隐私安全**：
+   - 音频数据仅在您的设备上录制，并直接发送至您配置的 API 服务商。
+   - 本地不留存录音音频文件；会保存必要配置（如 API Key、Model、快捷键）以便下次使用。
 
-## 技术栈
+## 🛠️ 技术栈
 
-- Tauri v2
-- Rust（音频录制、STT 调用、键盘输入）
-- Vanilla HTML / CSS / JavaScript（前端界面）
-- OpenRouter API（模型路由）
+- **Core**: [Rust](https://www.rust-lang.org/) (Tauri v2, cpal, hound, arboard, enigo)
+- **Frontend**: Vanilla JS + CSS (无框架，追求极致轻量与性能)
+- **API**: OpenRouter (兼容 OpenAI 格式)
 
-## 项目结构
+## 🚀 快速开始
 
-```text
-AItoType/
-├─ README.md
-├─ docs/
-│  └─ screenshots/
-└─ src/
-   └─ aitotype/
-      ├─ package.json
-      ├─ src/
-      │  ├─ index.html
-      │  ├─ main.js
-      │  ├─ styles.css
-      │  ├─ overlay.html
-      │  ├─ overlay.css
-      │  └─ overlay.js
-      └─ src-tauri/
-         ├─ tauri.conf.json
-         ├─ icons/
-         └─ src/
-            ├─ lib.rs
-            ├─ audio.rs
-            ├─ stt.rs
-            └─ keyboard.rs
-```
+### 前置要求
 
-## 环境要求
-
-- macOS（当前主要验证平台）
+- macOS (目前主要适配平台)
 - Node.js 18+
-- Rust stable（建议使用 rustup）
-- Xcode Command Line Tools（macOS）
+- Rust 环境 (推荐通过 `rustup` 安装)
 
-## 快速开始（开发）
-
-在项目根目录执行：
+### 开发运行
 
 ```bash
-cd /Users/robin/Work/sideproject/AItoType/src/aitotype
+# 1. 克隆项目
+git clone https://github.com/your-username/AitoType.git
+cd AitoType/src/aitotype
+
+# 2. 安装依赖
 npm install
+
+# 3. 启动开发模式
 npm run tauri dev
 ```
 
-如果你在仓库根目录执行，可使用：
+### 打包构建
 
 ```bash
-npm --prefix /Users/robin/Work/sideproject/AItoType/src/aitotype run tauri dev
-```
-
-## 配置说明
-
-打开应用 `Settings` 页面配置：
-
-- `OpenRouter API Key`：你的 OpenRouter Key
-- `Model`：默认 `google/gemini-3-flash-preview`（可改）
-- `Global Shortcut`：设置全局快捷键
-- `Auto-Copy Result`：识别后自动复制到剪贴板
-
-### 推荐 Model
-
-- 默认：`google/gemini-3-flash-preview`
-- 如遇地区或 provider 限制，可在 OpenRouter 侧调整路由策略或更换可用模型
-
-## 使用方式
-
-1. 在任意应用输入框中，将光标放到目标位置
-2. 按一次全局快捷键开始录音
-3. 再按一次全局快捷键结束并识别
-4. 识别结果会自动粘贴回当前输入框（后台触发场景）
-
-## 打包构建
-
-在 `src/aitotype` 目录执行：
-
-```bash
+# 在 src/aitotype 目录下执行
 npm run tauri build
 ```
+构建产物通常位于 `src-tauri/target/release/bundle/dmg/*.dmg`。
 
-常见产物路径（macOS）：
+## ⚙️ 配置指南
 
-- `.app`：`src/aitotype/src-tauri/target/release/bundle/macos/`
-- `.dmg`：`src/aitotype/src-tauri/target/release/bundle/dmg/`
+首次启动后，请点击主界面底部的 **设置图标 (⚙️)** 进行配置：
 
-## 更新应用图标
+1. **OpenRouter API Key**: 填入你的 Key（前往 [OpenRouter.ai](https://openrouter.ai/) 获取）。
+2. **Model**: 默认为 `google/gemini-3-flash-preview`，你也可以填入其他已订阅的模型 ID。
+3. **Global Shortcut**: 点击录制你习惯的快捷键（如 `Cmd+Shift+M` 或 `F1`）。
+4. **Auto-Copy**: 开启后，识别结果会自动进入剪贴板。
 
-项目已支持通过单张源图批量生成图标资源：
+**注意**：配置会自动保存到本地，重启应用无需重新输入。
 
-```bash
-cd /Users/robin/Work/sideproject/AItoType/src/aitotype
-npm run tauri icon /Users/robin/Work/sideproject/AItoType/icon.png
-```
+## 🧭 使用方法
 
-## 常见问题
+### 首次使用（建议）
 
-### 1) `npm ERR! enoent Could not read package.json`
+1. 打开应用，进入 **Settings** 页面。
+2. 填写 `OpenRouter API Key` 与 `Model`，点击 **Save Changes**。
+3. 设置你习惯的全局快捷键（默认 `Alt+Space`）。
+4. 按需开启 `Auto-Copy Result`。
 
-原因：执行目录不在 `src/aitotype`。  
-解决：切换到 `src/aitotype` 再运行命令，或使用 `npm --prefix ...`。
+### 日常使用流程
 
-### 2) OpenRouter 返回 400（地区限制）
+1. 在任意应用中把光标放到目标输入框（如 Chatbox、微信、飞书、编辑器、文档）。
+2. 按一次全局快捷键开始录音。
+3. 说完后再次按快捷键结束录音，应用会自动转写。
+4. 如在后台触发录音，转写完成后会自动把文本粘贴到当前光标位置。
+5. 如需手动处理结果，可在主界面中复制文本或查看历史记录。
 
-如出现类似 `User location is not supported for the API use.`：
+### 常见场景
 
-- 这是上游 provider 的地区限制，不是录音功能故障
-- 可在 OpenRouter 控制台调整该模型的 provider 路由
-- 或更换当前可用的模型 / 网络区域
+- **聊天回复**：边说边转写，快速发送长消息。
+- **会议纪要**：录制关键语句，集中整理到文档。
+- **代码注释/文档**：先口述内容，再微调文字。
 
-### 3) 全局快捷键无效
+## 🤝 贡献与反馈
 
-- 检查是否被系统或其他应用占用
-- 在设置页重新录制快捷键
-- macOS 下确保应用具备麦克风/辅助功能权限
+欢迎提交 Issue 或 Pull Request！无论是功能建议、Bug 反馈还是代码贡献，我们都非常欢迎。
 
-## 隐私说明
+## 📄 许可证 (License)
 
-- 本地采集音频后发送到你配置的 STT API 进行转写
-- 识别文本仅用于展示、复制与自动粘贴
-- 请遵守你所在地区的隐私与合规要求
+本项目采用 **非商业开源协议**。
 
-## Roadmap（可选）
+- ✅ **允许**：个人免费使用、修改源码用于学习或个人项目、分发给他人免费使用。
+- ❌ **禁止**：将本项目或其衍生代码用于**任何形式的商业盈利**（包括但不限于付费软件、广告植入、企业内部收费工具等）。
 
-- 多 provider 切换与可视化路由策略
-- 结果后处理（标点、格式化、摘要）
-- 自定义快捷命令（翻译、润色、改写）
+---
 
-## License
-
-你可以在发布前补充 License（例如 MIT）。
+Made with ❤️ by Robin. Enjoy typing with your voice!

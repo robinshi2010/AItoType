@@ -10,7 +10,7 @@
     "withGlobalTauri": true,
     "windows": [
       {
-        "title": "AitoType - 语音转文字",
+        "title": "AItoType",
         "label": "main",
         "width": 960,
         "height": 720,
