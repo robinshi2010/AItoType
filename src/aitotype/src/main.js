@@ -140,20 +140,24 @@ async function copyResultToClipboard(text) {
   }
 }
 
-async function safeShowOverlayStatus(status) {
-  try {
-    await invoke('show_overlay_status', { status });
-  } catch (e) {
-    console.error('Show overlay failed', e);
-  }
+function invokeWithTimeout(command, payload, timeoutMs = 800) {
+  const call = invoke(command, payload);
+  const timeout = new Promise((_, reject) => {
+    setTimeout(() => reject(new Error(`${command} timeout`)), timeoutMs);
+  });
+  return Promise.race([call, timeout]);
 }
 
-async function safeHideOverlay() {
-  try {
-    await invoke('hide_overlay');
-  } catch (e) {
+function safeShowOverlayStatus(status) {
+  invokeWithTimeout('show_overlay_status', { status }).catch((e) => {
+    console.error('Show overlay failed', e);
+  });
+}
+
+function safeHideOverlay() {
+  invokeWithTimeout('hide_overlay', {}).catch((e) => {
     console.error('Hide overlay failed', e);
-  }
+  });
 }
 
 // ============ Recorder Logic ============
@@ -165,7 +169,7 @@ async function toggleRecording() {
     try {
       updateStatus('transcribing');
       if (state.backgroundSession) {
-        await safeShowOverlayStatus('transcribing');
+        safeShowOverlayStatus('transcribing');
       }
       const result = await invoke('stop_and_transcribe');
 
@@ -179,7 +183,7 @@ async function toggleRecording() {
 
       // Auto-paste back to the active app only for background shortcut sessions
       if (state.backgroundSession) {
-        await safeHideOverlay();
+        safeHideOverlay();
         try {
           await invoke('paste_text', { text: result });
         } catch (e) { console.error('Paste failed', e); }
@@ -188,14 +192,14 @@ async function toggleRecording() {
       updateStatus('success', result);
 
       if (state.backgroundSession) {
-        await safeHideOverlay();
+        safeHideOverlay();
       }
       state.backgroundSession = false;
     } catch (e) {
       console.error(e);
       updateStatus('error', e.toString());
       if (state.backgroundSession) {
-        await safeHideOverlay();
+        safeHideOverlay();
       }
       state.backgroundSession = false;
     }
@@ -211,7 +215,7 @@ async function toggleRecording() {
       updateStatus('recording');
 
       if (state.backgroundSession) {
-        await safeShowOverlayStatus('recording');
+        safeShowOverlayStatus('recording');
       }
     } catch (e) {
       // If anything fails after start attempt, try rollback to avoid stuck recording state.
@@ -220,7 +224,7 @@ async function toggleRecording() {
       } catch (_) { }
       updateStatus('error', e.toString());
       if (state.backgroundSession) {
-        await safeHideOverlay();
+        safeHideOverlay();
       }
       state.backgroundSession = false;
       state.pendingShortcutContext = null;

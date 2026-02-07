@@ -203,24 +203,36 @@ fn show_overlay_status(app: tauri::AppHandle, status: String) -> Result<(), Stri
         .get_webview_window("overlay")
         .ok_or_else(|| "overlay window not found".to_string())?;
 
-    if let (Ok(Some(monitor)), Ok(size)) = (overlay.current_monitor(), overlay.outer_size()) {
+    const OVERLAY_WIDTH: u32 = 336;
+    const OVERLAY_HEIGHT: u32 = 72;
+
+    let monitor = app
+        .get_webview_window("main")
+        .and_then(|main| main.current_monitor().ok().flatten())
+        .or_else(|| overlay.current_monitor().ok().flatten());
+
+    if let Some(monitor) = monitor {
         let monitor_pos = monitor.position();
         let monitor_size = monitor.size();
-        let x = monitor_pos.x + ((monitor_size.width.saturating_sub(size.width)) / 2) as i32;
-        let y = (monitor_pos.y + (monitor_size.height as i32 - size.height as i32 - 96))
+        let x = monitor_pos.x + ((monitor_size.width.saturating_sub(OVERLAY_WIDTH)) / 2) as i32;
+        let y = (monitor_pos.y + (monitor_size.height as i32 - OVERLAY_HEIGHT as i32 - 96))
             .max(monitor_pos.y);
         let _ = overlay.set_position(tauri::Position::Physical(tauri::PhysicalPosition::new(x, y)));
     }
 
-    overlay.show().map_err(|e| e.to_string())?;
-    overlay
-        .emit(
-            "overlay-status",
-            OverlayStatusPayload {
-                status: status.trim().to_lowercase(),
-            },
-        )
-        .map_err(|e| e.to_string())?;
+    if let Err(e) = overlay.show() {
+        eprintln!("show overlay failed: {:?}", e);
+        return Ok(());
+    }
+
+    if let Err(e) = overlay.emit(
+        "overlay-status",
+        OverlayStatusPayload {
+            status: status.trim().to_lowercase(),
+        },
+    ) {
+        eprintln!("emit overlay-status failed: {:?}", e);
+    }
 
     Ok(())
 }
@@ -232,7 +244,11 @@ fn hide_overlay(app: tauri::AppHandle) -> Result<(), String> {
     let overlay = app
         .get_webview_window("overlay")
         .ok_or_else(|| "overlay window not found".to_string())?;
-    overlay.hide().map_err(|e| e.to_string())
+
+    if let Err(e) = overlay.hide() {
+        eprintln!("hide overlay failed: {:?}", e);
+    }
+    Ok(())
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -283,6 +299,15 @@ pub fn run() {
                     }
                 })
                 .build(app)?;
+
+            // 预热 overlay 窗口，避免首次通过快捷键唤起时出现初始化卡顿。
+            if let Some(overlay) = app.get_webview_window("overlay") {
+                let _ = overlay.set_position(tauri::Position::Physical(
+                    tauri::PhysicalPosition::new(-10000, -10000),
+                ));
+                let _ = overlay.show();
+                let _ = overlay.hide();
+            }
 
             // --- Global Shortcut (Alt+Space) ---
             #[cfg(desktop)]

@@ -13,7 +13,7 @@ body {
   height: 100%;
   margin: 0;
   padding: 0;
-  background: rgba(0, 0, 0, 0.01);
+  background: transparent;
   overflow: hidden;
   font-family: -apple-system, BlinkMacSystemFont, "SF Pro Rounded", "SF Pro Display", sans-serif;
   color-scheme: dark;
@@ -36,6 +36,8 @@ body {
   width: 334px;
   height: 70px;
   border-radius: 999px;
+  clip-path: inset(0 round 999px);
+  -webkit-mask-image: -webkit-radial-gradient(white, black);
   display: flex;
   align-items: center;
   gap: 14px;
