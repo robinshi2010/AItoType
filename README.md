@@ -277,10 +277,15 @@ codesign --verify --deep --strict --verbose=2 "src/aitotype/src-tauri/target/rel
 
 ## 📄 许可证 (License)
 
-本项目采用 **非商业开源协议**。
+本项目采用 **CC BY-NC-SA 4.0** 协议（署名-非商业性使用-相同方式共享）。
 
-- ✅ **允许**：个人免费使用、修改源码用于学习或个人项目、分发给他人免费使用。
-- ❌ **禁止**：将本项目或其衍生代码用于**任何形式的商业盈利**（包括但不限于付费软件、广告植入、企业内部收费工具等）。
+- ✅ **允许**：复制、分发、修改、二次创作（需署名，并以相同协议共享）。
+- ❌ **禁止**：将本项目或其衍生作品用于商业用途。
+
+协议详情：
+
+- License summary: https://creativecommons.org/licenses/by-nc-sa/4.0/
+- Legal code: https://creativecommons.org/licenses/by-nc-sa/4.0/legalcode
 
 ---
 
