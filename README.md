@@ -240,7 +240,7 @@ codesign --verify --deep --strict --verbose=2 "src/aitotype/src-tauri/target/rel
 首次启动后，请点击主界面底部的 **设置图标 (⚙️)** 进行配置：
 
 1. **Supplier**: 选择 OpenRouter 或 SiliconFlow。
-2. **API Key**: 填入对应平台的 Key（[OpenRouter.ai](https://openrouter.ai/) 或 [SiliconFlow](https://docs.siliconflow.cn/)）。
+2. **API Key**: 填入对应平台的 Key（[OpenRouter.ai](https://openrouter.ai/) 或 [SiliconFlow](https://cloud.siliconflow.cn/i/zbtzfOmG) (利益相关：注册会给我 16 元的 token额度有效期 180 天)）。
 3. **Model**: OpenRouter 默认 `google/gemini-3-flash-preview`，SiliconFlow 默认使用 TeleAI 模型。你也可以填入其他支持的模型 ID。
 4. **Global Shortcut**: 点击录制你习惯的快捷键（如 `Cmd+M` 或 `F1`）。
 5. **Auto-Copy**: 开启后，识别结果会自动进入剪贴板。
