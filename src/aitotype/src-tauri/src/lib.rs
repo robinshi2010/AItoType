@@ -2,18 +2,65 @@
 //!
 //! 核心功能:
 //! - 录音 (audio 模块)
-//! - 语音识别 (stt 模块) - 使用 OpenRouter API
+//! - 语音识别 (stt 模块) - 支持 OpenRouter / SiliconFlow
 //! - 键盘输入 (keyboard 模块)
 
 mod audio;
 mod keyboard;
 mod stt;
 
-use stt::SttConfig;
 use serde::Serialize;
 use std::sync::Mutex;
+use stt::SttConfig;
 use tauri::State;
 use tauri_plugin_global_shortcut::GlobalShortcutExt;
+
+fn load_env_files() {
+    static INIT: std::sync::Once = std::sync::Once::new();
+
+    INIT.call_once(|| {
+        let _ = dotenv::dotenv();
+
+        if let Ok(current_dir) = std::env::current_dir() {
+            for ancestor in current_dir.ancestors() {
+                let poc_env = ancestor.join("poc/.env");
+                if poc_env.exists() {
+                    let _ = dotenv::from_path(poc_env);
+                    break;
+                }
+            }
+        }
+    });
+}
+
+fn normalize_stt_config(config: SttConfig) -> SttConfig {
+    let mut normalized = config;
+    normalized.provider = stt::normalize_provider(&normalized.provider);
+
+    if normalized.base_url.trim().is_empty() {
+        normalized.base_url = stt::default_base_url_for_provider(&normalized.provider).to_string();
+    } else {
+        normalized.base_url = normalized.base_url.trim().trim_end_matches('/').to_string();
+    }
+
+    if normalized.model.trim().is_empty() {
+        normalized.model = stt::default_model_for_provider(&normalized.provider).to_string();
+    } else {
+        normalized.model = normalized.model.trim().to_string();
+    }
+
+    normalized.api_key = normalized.api_key.trim().to_string();
+    normalized
+}
+
+fn has_resolved_api_key(config: &SttConfig) -> bool {
+    if !config.api_key.trim().is_empty() {
+        return true;
+    }
+
+    let env_key = stt::env_key_for_provider(&config.provider);
+    matches!(std::env::var(env_key), Ok(value) if !value.trim().is_empty())
+}
 
 /// 应用状态
 pub struct AppState {
@@ -22,18 +69,16 @@ pub struct AppState {
 
 impl Default for AppState {
     fn default() -> Self {
-        // 加载环境变量配置
-        dotenv::dotenv().ok();
-        
-        // 尝试从环境变量加载 API Key
-        let api_key = std::env::var("OPENROUTER_API_KEY").unwrap_or_default();
-        
+        load_env_files();
+
+        let mut config = SttConfig::default();
+        let env_key = stt::env_key_for_provider(&config.provider);
+        if let Ok(value) = std::env::var(env_key) {
+            config.api_key = value.trim().to_string();
+        }
+
         Self {
-            stt_config: Mutex::new(SttConfig {
-                base_url: stt::DEFAULT_BASE_URL.to_string(),
-                api_key,
-                model: stt::DEFAULT_MODEL.to_string(),
-            }),
+            stt_config: Mutex::new(normalize_stt_config(config)),
         }
     }
 }
@@ -103,10 +148,13 @@ fn get_audio_level() -> f32 {
 /// 转录音频文件
 #[tauri::command]
 async fn transcribe_audio(file_path: String, state: State<'_, AppState>) -> Result<String, String> {
-    let config = state.stt_config.lock()
+    let config = state
+        .stt_config
+        .lock()
         .map_err(|e| format!("获取配置失败: {:?}", e))?
         .clone();
-    
+    let config = normalize_stt_config(config);
+
     stt::transcribe(&file_path, &config).await
 }
 
@@ -115,11 +163,14 @@ async fn transcribe_audio(file_path: String, state: State<'_, AppState>) -> Resu
 async fn stop_and_transcribe(state: State<'_, AppState>) -> Result<String, String> {
     // 停止录音
     let file_path = audio::stop_recording()?;
-    
+
     // 转录
-    let config = state.stt_config.lock()
+    let config = state
+        .stt_config
+        .lock()
         .map_err(|e| format!("获取配置失败: {:?}", e))?
         .clone();
+    let config = normalize_stt_config(config);
 
     let transcribe_result = stt::transcribe(&file_path, &config).await;
 
@@ -152,27 +203,27 @@ fn copy_to_clipboard(text: String) -> Result<(), String> {
 /// 获取当前 STT 配置
 #[tauri::command]
 fn get_stt_config(state: State<AppState>) -> Result<SttConfig, String> {
-    state.stt_config.lock()
-        .map(|c| c.clone())
+    state
+        .stt_config
+        .lock()
+        .map(|c| normalize_stt_config(c.clone()))
         .map_err(|e| format!("获取配置失败: {:?}", e))
 }
 
 /// 保存 STT 配置
 #[tauri::command]
-fn save_stt_config(app: tauri::AppHandle, config: SttConfig, state: State<AppState>) -> Result<(), String> {
-    let mut normalized = config;
-
-    if normalized.base_url.trim().is_empty() {
-        normalized.base_url = stt::DEFAULT_BASE_URL.to_string();
-    }
-
-    if normalized.model.trim().is_empty() {
-        normalized.model = stt::DEFAULT_MODEL.to_string();
-    }
+fn save_stt_config(
+    app: tauri::AppHandle,
+    config: SttConfig,
+    state: State<AppState>,
+) -> Result<(), String> {
+    let normalized = normalize_stt_config(config);
 
     // 更新内存状态
     {
-        let mut current = state.stt_config.lock()
+        let mut current = state
+            .stt_config
+            .lock()
             .map_err(|e| format!("获取配置失败: {:?}", e))?;
         *current = normalized.clone();
     }
@@ -185,7 +236,7 @@ fn save_stt_config(app: tauri::AppHandle, config: SttConfig, state: State<AppSta
         if let Some(parent) = config_path.parent() {
             let _ = std::fs::create_dir_all(parent);
         }
-        
+
         if let Ok(json) = serde_json::to_string_pretty(&normalized) {
             if let Err(e) = std::fs::write(&config_path, json) {
                 eprintln!("保存配置失败: {:?}", e);
@@ -200,15 +251,25 @@ fn save_stt_config(app: tauri::AppHandle, config: SttConfig, state: State<AppSta
 /// 测试 API 连接
 #[tauri::command]
 async fn test_connection(state: State<'_, AppState>) -> Result<String, String> {
-    let config = state.stt_config.lock()
+    let config = state
+        .stt_config
+        .lock()
         .map_err(|e| format!("获取配置失败: {:?}", e))?
         .clone();
-    
-    if config.api_key.is_empty() {
-        return Err("API Key 不能为空".to_string());
+    let config = normalize_stt_config(config);
+
+    if !has_resolved_api_key(&config) {
+        let env_key = stt::env_key_for_provider(&config.provider);
+        return Err(format!(
+            "API Key 不能为空（可通过环境变量 {} 提供）",
+            env_key
+        ));
     }
-    
-    Ok(format!("连接测试成功 - Model: {}", config.model))
+
+    Ok(format!(
+        "连接测试成功 - Provider: {}, Model: {}",
+        config.provider, config.model
+    ))
 }
 
 /// 更新全局快捷键
@@ -216,9 +277,11 @@ async fn test_connection(state: State<'_, AppState>) -> Result<String, String> {
 fn update_shortcut(app: tauri::AppHandle, shortcut: String) -> Result<(), String> {
     // 忽略 unregister 错误（可能本来就没有）
     let _ = app.global_shortcut().unregister_all();
-    
+
     if !shortcut.is_empty() {
-        app.global_shortcut().register(shortcut.as_str()).map_err(|e| e.to_string())?;
+        app.global_shortcut()
+            .register(shortcut.as_str())
+            .map_err(|e| e.to_string())?;
     }
     Ok(())
 }
@@ -262,7 +325,9 @@ fn show_overlay_status(app: tauri::AppHandle, status: String) -> Result<(), Stri
         let y = (monitor_pos.y
             + (monitor_size.height as i32 - overlay_height as i32 - OVERLAY_BOTTOM_MARGIN))
             .max(monitor_pos.y);
-        let _ = overlay.set_position(tauri::Position::Physical(tauri::PhysicalPosition::new(x, y)));
+        let _ = overlay.set_position(tauri::Position::Physical(tauri::PhysicalPosition::new(
+            x, y,
+        )));
     } else {
         // 回退方案：如果当前拿不到显示器信息，至少保证窗口回到可见区域。
         let _ = overlay.center();
@@ -304,8 +369,23 @@ fn hide_overlay(app: tauri::AppHandle) -> Result<(), String> {
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
+        .on_window_event(|window, event| {
+            use tauri::Manager;
+            if window.label() != "main" {
+                return;
+            }
+
+            if let tauri::WindowEvent::CloseRequested { api, .. } = event {
+                api.prevent_close();
+                let _ = window.hide();
+                if let Some(overlay) = window.app_handle().get_webview_window("overlay") {
+                    let _ = overlay.hide();
+                }
+            }
+        })
         .plugin(tauri_plugin_opener::init())
         .setup(|app| {
+            load_env_files();
             // --- 加载持久化配置 ---
             use tauri::Manager;
             if let Ok(path) = app.path().app_config_dir() {
@@ -313,11 +393,11 @@ pub fn run() {
                 if config_path.exists() {
                     if let Ok(content) = std::fs::read_to_string(&config_path) {
                         if let Ok(saved_config) = serde_json::from_str::<SttConfig>(&content) {
-                             let state = app.state::<AppState>();
-                             if let Ok(mut guard) = state.stt_config.lock() {
-                                 *guard = saved_config;
-                                 println!("✅ 已加载配置文件: {:?}", config_path);
-                             };
+                            let state = app.state::<AppState>();
+                            if let Ok(mut guard) = state.stt_config.lock() {
+                                *guard = normalize_stt_config(saved_config);
+                                println!("✅ 已加载配置文件: {:?}", config_path);
+                            };
                         }
                     }
                 }
@@ -351,7 +431,8 @@ pub fn run() {
 
             // 预热 overlay 窗口，避免首次通过快捷键唤起时出现初始化卡顿。
             if let Some(overlay) = app.get_webview_window("overlay") {
-                let _ = overlay.set_size(tauri::Size::Logical(tauri::LogicalSize::new(334.0, 86.0)));
+                let _ =
+                    overlay.set_size(tauri::Size::Logical(tauri::LogicalSize::new(334.0, 86.0)));
                 let _ = overlay.show();
                 let _ = overlay.hide();
             }
@@ -359,8 +440,8 @@ pub fn run() {
             // --- Global Shortcut (Alt+Space) ---
             #[cfg(desktop)]
             {
-                use tauri_plugin_global_shortcut::ShortcutState;
                 use tauri::Emitter;
+                use tauri_plugin_global_shortcut::ShortcutState;
 
                 app.handle().plugin(
                     tauri_plugin_global_shortcut::Builder::new()
@@ -384,14 +465,6 @@ pub fn run() {
 
             Ok(())
         })
-        .on_window_event(|window, event| {
-            if window.label() == "main" {
-                if let tauri::WindowEvent::CloseRequested { api, .. } = event {
-                    api.prevent_close();
-                    let _ = window.hide();
-                }
-            }
-        })
         .manage(AppState::default())
         .invoke_handler(tauri::generate_handler![
             start_recording,
@@ -413,8 +486,11 @@ pub fn run() {
         .build(tauri::generate_context!())
         .expect("error while building tauri application")
         .run(|app, event| {
-            if let tauri::RunEvent::Reopen { .. } = event {
-                let _ = show_or_create_main_window(app);
+            #[cfg(target_os = "macos")]
+            if matches!(event, tauri::RunEvent::Reopen { .. }) {
+                if let Err(e) = show_or_create_main_window(app) {
+                    eprintln!("reopen main window failed: {}", e);
+                }
             }
         });
 }
