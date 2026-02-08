@@ -1,7 +1,7 @@
 # AItoType 🎙️
 
 <p align="center">
-  <img src="icon.png" alt="AItoType Icon" width="128" height="128" />
+  <img src="docs/screenshots/app-icon.png" alt="AItoType Icon" width="128" height="128" />
 </p>
 
 AItoType 是一个开源、免费的桌面端语音转文字工具，基于 **Tauri v2** 构建，旨在提供极致轻量、高效的语音输入体验。
