@@ -130,7 +130,17 @@
           </div>
 
           <div class="form-section">
-            <label>OpenRouter API Key</label>
+            <label>Provider</label>
+            <div class="segmented-control">
+              <select id="provider-select" class="spatial-input">
+                <option value="openrouter">OpenRouter</option>
+                <option value="siliconflow">SiliconFlow</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="form-section">
+            <label id="api-key-label">OpenRouter API Key</label>
             <input type="password" id="api-key-input" class="spatial-input" placeholder="sk-or-...">
           </div>
 

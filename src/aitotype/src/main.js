@@ -7,6 +7,15 @@ const { invoke } = window.__TAURI__.core;
 // Safely try to get listen, fallback if not available
 const { listen } = window.__TAURI__.event || { listen: () => { } };
 
+const PROVIDER_OPENROUTER = 'openrouter';
+const PROVIDER_SILICONFLOW = 'siliconflow';
+const DEFAULT_OPENROUTER_MODEL = 'google/gemini-3-flash-preview';
+const DEFAULT_SILICONFLOW_MODEL = 'TeleAI/TeleSpeechASR';
+const API_KEY_STORAGE_KEYS = {
+  [PROVIDER_OPENROUTER]: 'aitotype_api_key_openrouter',
+  [PROVIDER_SILICONFLOW]: 'aitotype_api_key_siliconflow'
+};
+
 // ============ State ============
 const state = {
   status: 'idle',
@@ -18,7 +27,12 @@ const state = {
   pendingShortcutContext: null,
   backgroundSession: false,
   lastShortcutToggleAt: 0,
-  sttConfig: null
+  sttConfig: null,
+  currentProvider: PROVIDER_OPENROUTER,
+  providerApiKeys: {
+    [PROVIDER_OPENROUTER]: '',
+    [PROVIDER_SILICONFLOW]: ''
+  }
 };
 
 // ============ Elements ============
@@ -44,6 +58,8 @@ const el = {
   autoCopySwitch: document.getElementById('auto-copy-switch'),
 
   // Settings
+  providerSelect: document.getElementById('provider-select'),
+  apiKeyLabel: document.getElementById('api-key-label'),
   apiKeyInput: document.getElementById('api-key-input'),
   modelInput: document.getElementById('model-input'),
   settingsForm: document.getElementById('settings-form'),
@@ -207,6 +223,7 @@ async function toggleRecording() {
     // Start Recording
     hideResult();
     try {
+      await syncConfigFromUi();
       const fromBackgroundShortcut = Boolean(state.pendingShortcutContext?.background);
       state.backgroundSession = fromBackgroundShortcut;
       state.pendingShortcutContext = null;
@@ -271,12 +288,115 @@ function renderHistory() {
 }
 
 // ============ Settings ============
+function normalizeProvider(provider) {
+  return provider === PROVIDER_SILICONFLOW ? PROVIDER_SILICONFLOW : PROVIDER_OPENROUTER;
+}
+
+function defaultModelForProvider(provider) {
+  return provider === PROVIDER_SILICONFLOW ? DEFAULT_SILICONFLOW_MODEL : DEFAULT_OPENROUTER_MODEL;
+}
+
+function keyStorageKey(provider) {
+  return API_KEY_STORAGE_KEYS[normalizeProvider(provider)];
+}
+
+function getStoredApiKey(provider) {
+  const storageKey = keyStorageKey(provider);
+  if (!storageKey) return '';
+  return localStorage.getItem(storageKey) || '';
+}
+
+function setStoredApiKey(provider, value) {
+  const storageKey = keyStorageKey(provider);
+  if (!storageKey) return;
+  if (!value) {
+    localStorage.removeItem(storageKey);
+    return;
+  }
+  localStorage.setItem(storageKey, value);
+}
+
+function cacheCurrentProviderApiKey() {
+  const provider = normalizeProvider(state.currentProvider);
+  if (!provider || !el.apiKeyInput) return;
+  const value = el.apiKeyInput.value || '';
+  state.providerApiKeys[provider] = value;
+  setStoredApiKey(provider, value);
+}
+
+function syncProviderUi(provider) {
+  if (el.apiKeyLabel) {
+    el.apiKeyLabel.textContent = provider === PROVIDER_SILICONFLOW
+      ? 'SiliconFlow API Key'
+      : 'OpenRouter API Key';
+  }
+
+  if (el.apiKeyInput) {
+    el.apiKeyInput.placeholder = provider === PROVIDER_SILICONFLOW ? 'sk-...' : 'sk-or-...';
+  }
+}
+
+function onProviderChange() {
+  cacheCurrentProviderApiKey();
+  const provider = normalizeProvider(el.providerSelect?.value);
+  const currentModel = el.modelInput?.value?.trim() || '';
+  const shouldResetModel = !currentModel
+    || currentModel === DEFAULT_OPENROUTER_MODEL
+    || currentModel === DEFAULT_SILICONFLOW_MODEL;
+
+  state.currentProvider = provider;
+  syncProviderUi(provider);
+  if (el.apiKeyInput) {
+    el.apiKeyInput.value = state.providerApiKeys[provider] || '';
+  }
+  if (shouldResetModel && el.modelInput) {
+    el.modelInput.value = defaultModelForProvider(provider);
+  }
+}
+
+function buildSttConfigFromUi() {
+  cacheCurrentProviderApiKey();
+  const provider = normalizeProvider(el.providerSelect?.value || state.currentProvider);
+  const apiKey = state.providerApiKeys[provider] || '';
+  const model = (el.modelInput?.value || '').trim() || defaultModelForProvider(provider);
+
+  return {
+    provider,
+    api_key: apiKey,
+    model,
+    base_url: ''
+  };
+}
+
+async function syncConfigFromUi() {
+  if (!el.providerSelect || !el.apiKeyInput || !el.modelInput) return;
+  const config = buildSttConfigFromUi();
+  await invoke('save_stt_config', { config });
+}
+
 async function loadConfig() {
   try {
     const config = await invoke('get_stt_config');
-    state.sttConfig = config;
-    if (config.api_key) el.apiKeyInput.value = config.api_key;
-    if (config.model) el.modelInput.value = config.model;
+    const provider = normalizeProvider(config.provider);
+    state.providerApiKeys[PROVIDER_OPENROUTER] = getStoredApiKey(PROVIDER_OPENROUTER);
+    state.providerApiKeys[PROVIDER_SILICONFLOW] = getStoredApiKey(PROVIDER_SILICONFLOW);
+
+    if (config.api_key && !state.providerApiKeys[provider]) {
+      state.providerApiKeys[provider] = config.api_key;
+      setStoredApiKey(provider, config.api_key);
+    }
+
+    state.currentProvider = provider;
+    state.sttConfig = { ...config, provider };
+
+    if (el.providerSelect) el.providerSelect.value = provider;
+    syncProviderUi(provider);
+    if (el.apiKeyInput) el.apiKeyInput.value = state.providerApiKeys[provider] || '';
+    if (config.model && el.modelInput) {
+      el.modelInput.value = config.model;
+    } else if (el.modelInput) {
+      el.modelInput.value = defaultModelForProvider(provider);
+    }
   } catch (e) { }
 }
 
@@ -287,14 +407,11 @@ async function saveConfig(e) {
     el.settingsSaveBtn.textContent = 'Saving...';
   }
 
-  const config = {
-    api_key: el.apiKeyInput.value,
-    model: el.modelInput.value,
-    base_url: state.sttConfig?.base_url || ''
-  };
+  const config = buildSttConfigFromUi();
 
   try {
     await invoke('save_stt_config', { config });
+    await loadConfig();
     if (el.settingsStatus) el.settingsStatus.textContent = '';
     if (el.settingsSaveBtn) {
       el.settingsSaveBtn.textContent = 'Saved';
@@ -315,6 +432,13 @@ async function saveConfig(e) {
       el.settingsSaveBtn.disabled = false;
     }
   }
+}
+
+function onApiKeyInput() {
+  const provider = normalizeProvider(el.providerSelect?.value || state.currentProvider);
+  if (!provider || !el.apiKeyInput) return;
+  const value = el.apiKeyInput.value || '';
+  state.providerApiKeys[provider] = value;
 }
 
 // ============ Shortcut Logic ============
@@ -469,6 +593,8 @@ async function init() {
 
   // Settings
   if (el.settingsForm) el.settingsForm.addEventListener('submit', saveConfig);
+  if (el.providerSelect) el.providerSelect.addEventListener('change', onProviderChange);
+  if (el.apiKeyInput) el.apiKeyInput.addEventListener('input', onApiKeyInput);
 
   // Load Config
   loadConfig();
