@@ -32,21 +32,38 @@ pub fn paste_text(text: &str) -> Result<(), String> {
     // 先复制到剪贴板
     copy_to_clipboard(text)?;
 
-    // 模拟 Cmd+V 粘贴
-    let mut enigo = Enigo::new(&Settings::default())
-        .map_err(|e| format!("初始化 enigo 失败: {:?}", e))?;
+    // macOS 使用 AppleScript 模拟 Cmd+V 更加稳定，避免 enigo 在某些环境下的权限检测失效问题
+    #[cfg(target_os = "macos")]
+    {
+        use std::process::Command;
+        use std::thread::sleep;
+        use std::time::Duration;
 
-    // macOS 使用 Meta (Command) 键
-    use enigo::Key;
-    
-    enigo.key(Key::Meta, enigo::Direction::Press)
-        .map_err(|e| format!("按键失败: {:?}", e))?;
-    
-    enigo.key(Key::Unicode('v'), enigo::Direction::Click)
-        .map_err(|e| format!("按键失败: {:?}", e))?;
-    
-    enigo.key(Key::Meta, enigo::Direction::Release)
-        .map_err(|e| format!("按键失败: {:?}", e))?;
+        // 稍微等待一下确保剪贴板已经写入完成
+        sleep(Duration::from_millis(100));
+
+        let script = "tell application \"System Events\" to keystroke \"v\" using command down";
+        match Command::new("osascript").arg("-e").arg(script).output() {
+            Ok(output) if !output.status.success() => {
+                let err = String::from_utf8_lossy(&output.stderr);
+                return Err(format!("AppleScript 执行失败: {}", err));
+            }
+            Err(e) => return Err(format!("无法运行 osascript: {:?}", e)),
+            _ => {}
+        }
+    }
+
+    #[cfg(not(target_os = "macos"))]
+    {
+        // 其他平台继续使用 enigo...
+        let mut enigo = Enigo::new(&Settings::default())
+            .map_err(|e| format!("初始化 enigo 失败: {:?}", e))?;
+        
+        use enigo::Key;
+        enigo.key(Key::Control, enigo::Direction::Press).ok();
+        enigo.key(Key::Unicode('v'), enigo::Direction::Click).ok();
+        enigo.key(Key::Control, enigo::Direction::Release).ok();
+    }
 
     Ok(())
 }

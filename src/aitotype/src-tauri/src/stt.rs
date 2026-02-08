@@ -69,6 +69,9 @@ pub struct SttConfig {
     pub api_key: String,
     /// 模型名称
     pub model: String,
+    /// 是否自动写入
+    #[serde(default)]
+    pub auto_write: bool,
 }
 
 impl Default for SttConfig {
@@ -78,6 +81,7 @@ impl Default for SttConfig {
             base_url: DEFAULT_OPENROUTER_BASE_URL.to_string(),
             api_key: String::new(),
             model: DEFAULT_OPENROUTER_MODEL.to_string(),
+            auto_write: false,
         }
     }
 }
