@@ -636,6 +636,60 @@ select:focus {
   overflow-y: auto;
 }
 
+.empty-state {
+  height: 100%;
+  min-height: 180px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: rgba(255, 255, 255, 0.45);
+  font-size: 14px;
+}
+
+.history-card {
+  width: 100%;
+  margin: 0 0 10px;
+  padding: 14px 16px;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.05);
+  color: rgba(255, 255, 255, 0.86);
+  text-align: left;
+  font: inherit;
+  cursor: pointer;
+  transition: background 0.2s ease, border-color 0.2s ease, transform 0.2s ease;
+}
+
+.history-card:hover {
+  background: rgba(255, 255, 255, 0.09);
+  border-color: rgba(255, 255, 255, 0.22);
+  transform: translateY(-1px);
+}
+
+.history-card:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(10, 132, 255, 0.25);
+}
+
+.history-card.copied {
+  border-color: rgba(10, 132, 255, 0.65);
+  background: rgba(10, 132, 255, 0.16);
+}
+
+.history-time {
+  margin-bottom: 6px;
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.42);
+}
+
+.history-text {
+  font-size: 14px;
+  line-height: 1.5;
+  color: rgba(255, 255, 255, 0.86);
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
 /* Utilities */
 ::-webkit-scrollbar {
   width: 6px;

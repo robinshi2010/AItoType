@@ -329,12 +329,38 @@ function renderHistory() {
     return;
   }
 
-  el.historyContainer.innerHTML = state.history.map(item => `
-          < div class="history-card" style = "padding:16px; margin-bottom:10px; background:rgba(255,255,255,0.05); border-radius:12px; font-size:14px; color:rgba(255,255,255,0.8);" >
-            <div style="font-size:11px; color:rgba(255,255,255,0.4); margin-bottom:4px">${item.time}</div>
-      ${item.text}
-    </div >
-          `).join('');
+  el.historyContainer.innerHTML = '';
+  const fragment = document.createDocumentFragment();
+
+  state.history.forEach((item) => {
+    const card = document.createElement('button');
+    card.type = 'button';
+    card.className = 'history-card';
+    card.title = 'Click to copy';
+
+    const time = document.createElement('div');
+    time.className = 'history-time';
+    time.textContent = item.time;
+
+    const text = document.createElement('div');
+    text.className = 'history-text';
+    text.textContent = item.text;
+
+    card.appendChild(time);
+    card.appendChild(text);
+
+    card.addEventListener('click', async () => {
+      const copied = await copyResultToClipboard(item.text);
+      if (!copied) return;
+      card.classList.add('copied');
+      setTimeout(() => card.classList.remove('copied'), 450);
+    });
+
+    fragment.appendChild(card);
+  });
+
+  el.historyContainer.appendChild(fragment);
+
 }
 
 // ============ Settings ============
