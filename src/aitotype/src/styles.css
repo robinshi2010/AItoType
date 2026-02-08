@@ -849,3 +849,78 @@ input:checked+.slider:before {
   color: #30D158 !important;
   border-color: rgba(48, 209, 88, 0.45);
 }
+
+/* Permission Hint */
+.permission-hint {
+  margin-top: -8px;
+  margin-bottom: 16px;
+  font-size: 11px;
+  color: #FF9F0A;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 12px;
+  background: rgba(255, 159, 10, 0.1);
+  border-radius: 10px;
+  border: 1px solid rgba(255, 159, 10, 0.2);
+  transition: all 0.3s;
+}
+
+.permission-hint.success {
+  color: #30D158;
+  background: rgba(48, 209, 88, 0.1);
+  border-color: rgba(48, 209, 88, 0.2);
+}
+
+.permission-hint svg {
+  flex-shrink: 0;
+}
+
+.text-link {
+  background: none;
+  border: none;
+  color: inherit;
+  text-decoration: underline;
+  cursor: pointer;
+  font-size: inherit;
+  padding: 0;
+  margin-left: auto;
+  opacity: 0.8;
+}
+
+.text-link:hover {
+  opacity: 1;
+}
+
+/* Permissions Guide */
+.permissions-guide {
+  margin-top: 20px;
+}
+
+.glass-info-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 12px;
+  background: rgba(255, 255, 255, 0.03);
+  padding: 16px;
+  border-radius: 16px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.info-item {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.info-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.8);
+}
+
+.info-path {
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.4);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+}

@@ -56,6 +56,9 @@ const el = {
   closeResultBtn: document.getElementById('reset-result-btn'),
   copyBtn: document.getElementById('copy-btn'),
   autoCopySwitch: document.getElementById('auto-copy-switch'),
+  autoWriteSwitch: document.getElementById('auto-write-switch'),
+  accessibilityHint: document.getElementById('accessibility-hint'),
+  openAccessibilityBtn: document.getElementById('open-accessibility-btn'),
 
   // Settings
   providerSelect: document.getElementById('provider-select'),
@@ -95,6 +98,46 @@ function switchView(viewId) {
       view.classList.remove('active');
     }
   });
+
+  if (viewId === 'view-settings') {
+    checkAccessibility();
+  }
+}
+
+// ============ Permission Checking ============
+async function checkAccessibility() {
+  try {
+    const trusted = await invoke('check_accessibility_permissions');
+    if (el.accessibilityHint) {
+      if (trusted) {
+        el.accessibilityHint.innerHTML = `
+          <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="#30D158" stroke-width="2">
+            <polyline points="20 6 9 17 4 12"></polyline>
+          </svg>
+          <span>Accessibility Permission OK</span>
+        `;
+        el.accessibilityHint.classList.add('success');
+      } else {
+        el.accessibilityHint.innerHTML = `
+          <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="#FF9F0A" stroke-width="2">
+            <circle cx="12" cy="12" r="10"></circle>
+            <line x1="12" y1="8" x2="12" y2="12"></line>
+            <line x1="12" y1="16" x2="12.01" y2="16"></line>
+          </svg>
+          <span>Need Accessibility Permission to Auto-Write</span>
+          <button type="button" id="open-accessibility-btn" class="text-link">Settings</button>
+        `;
+        el.accessibilityHint.classList.remove('success');
+
+        // Re-attach listener since we replaced innerHTML
+        const btn = el.accessibilityHint.querySelector('#open-accessibility-btn');
+        if (btn) {
+          btn.onclick = () => invoke('open_accessibility_settings');
+        }
+      }
+      el.accessibilityHint.classList.toggle('hidden', !el.autoWriteSwitch.checked);
+    }
+  } catch (e) { console.error('Check accessibility failed', e); }
 }
 
 // ============ Status System ============
@@ -197,12 +240,19 @@ async function toggleRecording() {
         await copyResultToClipboard(result);
       }
 
-      // Auto-paste back to the active app only for background shortcut sessions
-      if (state.backgroundSession) {
-        safeHideOverlay();
+      // Auto-Write (Paste) logic
+      const isAutoWriteEnabled = state.sttConfig?.auto_write || (el.autoWriteSwitch && el.autoWriteSwitch.checked);
+      if (state.backgroundSession || isAutoWriteEnabled) {
+        if (state.backgroundSession) {
+          safeHideOverlay();
+        }
+
         try {
           await invoke('paste_text', { text: result });
-        } catch (e) { console.error('Paste failed', e); }
+        } catch (e) {
+          console.error('Paste failed', e);
+          updateStatus('error', 'Paste failed. Check Accessibility permissions.');
+        }
       }
 
       updateStatus('success', result);
@@ -280,11 +330,11 @@ function renderHistory() {
   }
 
   el.historyContainer.innerHTML = state.history.map(item => `
-    <div class="history-card" style="padding:16px; margin-bottom:10px; background:rgba(255,255,255,0.05); border-radius:12px; font-size:14px; color:rgba(255,255,255,0.8);">
-      <div style="font-size:11px; color:rgba(255,255,255,0.4); margin-bottom:4px">${item.time}</div>
+          < div class="history-card" style = "padding:16px; margin-bottom:10px; background:rgba(255,255,255,0.05); border-radius:12px; font-size:14px; color:rgba(255,255,255,0.8);" >
+            <div style="font-size:11px; color:rgba(255,255,255,0.4); margin-bottom:4px">${item.time}</div>
       ${item.text}
-    </div>
-  `).join('');
+    </div >
+          `).join('');
 }
 
 // ============ Settings ============
@@ -364,7 +414,8 @@ function buildSttConfigFromUi() {
     provider,
     api_key: apiKey,
     model,
-    base_url: ''
+    base_url: '',
+    auto_write: el.autoWriteSwitch ? el.autoWriteSwitch.checked : false
   };
 }
 
@@ -396,6 +447,11 @@ async function loadConfig() {
       el.modelInput.value = config.model;
     } else if (el.modelInput) {
       el.modelInput.value = defaultModelForProvider(provider);
+    }
+
+    if (el.autoWriteSwitch) {
+      el.autoWriteSwitch.checked = !!config.auto_write;
+      checkAccessibility();
     }
   } catch (e) { }
 }
@@ -608,6 +664,20 @@ async function init() {
   if (el.autoCopySwitch) {
     el.autoCopySwitch.addEventListener('change', (e) => {
       localStorage.setItem('aitotype_autocopy', e.target.checked);
+    });
+  }
+
+  if (el.autoWriteSwitch) {
+    el.autoWriteSwitch.addEventListener('change', async (e) => {
+      if (e.target.checked) {
+        // Proactively request if not trusted
+        const isTrusted = await invoke('check_accessibility_permissions');
+        if (!isTrusted) {
+          await invoke('request_accessibility_permissions');
+        }
+      }
+      syncConfigFromUi();
+      checkAccessibility();
     });
   }
 

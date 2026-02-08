@@ -84,7 +84,8 @@
                 <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
               </svg>
             </button>
-            <button id="reset-result-btn" class="spatial-btn icon-only danger" title="Dismiss transcript" aria-label="Dismiss transcript">
+            <button id="reset-result-btn" class="spatial-btn icon-only danger" title="Dismiss transcript"
+              aria-label="Dismiss transcript">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                 <line x1="18" y1="6" x2="6" y2="18"></line>
                 <line x1="6" y1="6" x2="18" y2="18"></line>
@@ -120,11 +121,28 @@
                 <span class="slider"></span>
               </label>
             </div>
+            <div class="glass-toggle-row">
+              <span>Auto-Write Result</span>
+              <label class="toggle-switch">
+                <input type="checkbox" id="auto-write-switch">
+                <span class="slider"></span>
+              </label>
+            </div>
+            <div id="accessibility-hint" class="permission-hint hidden">
+              <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2">
+                <circle cx="12" cy="12" r="10"></circle>
+                <line x1="12" y1="8" x2="12" y2="12"></line>
+                <line x1="12" y1="16" x2="12.01" y2="16"></line>
+              </svg>
+              <span>Need Accessibility Permission</span>
+              <button type="button" id="open-accessibility-btn" class="text-link">Settings</button>
+            </div>
           </div>
 
           <div class="form-section">
             <label>Global Shortcut</label>
-            <div id="shortcut-recorder" class="shortcut-recorder" role="button" tabindex="0" aria-label="Set global shortcut">
+            <div id="shortcut-recorder" class="shortcut-recorder" role="button" tabindex="0"
+              aria-label="Set global shortcut">
               <span id="shortcut-label">Click to set shortcut</span>
             </div>
           </div>
@@ -144,9 +162,23 @@
             <input type="password" id="api-key-input" class="spatial-input" placeholder="sk-or-...">
           </div>
 
-          <div class="form-section" id="model-section">
+          <div class="form-section">
             <label>Model</label>
             <input type="text" id="model-input" class="spatial-input" value="google/gemini-3-flash-preview">
+          </div>
+
+          <div class="form-section permissions-guide">
+            <label>Privacy & Permissions</label>
+            <div class="glass-info-grid">
+              <div class="info-item">
+                <span class="info-title">Microphone</span>
+                <span class="info-path">System Settings > Privacy > Microphone</span>
+              </div>
+              <div class="info-item">
+                <span class="info-title">Auto-Write & Paste</span>
+                <span class="info-path">System Settings > Privacy > Accessibility</span>
+              </div>
+            </div>
           </div>
 
           <div class="form-footer">

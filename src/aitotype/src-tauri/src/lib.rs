@@ -325,6 +325,77 @@ fn show_overlay_status(app: tauri::AppHandle, status: String) -> Result<(), Stri
 }
 
 #[tauri::command]
+fn check_accessibility_permissions() -> bool {
+    #[cfg(target_os = "macos")]
+    {
+        #[link(name = "ApplicationServices", kind = "framework")]
+        extern "C" {
+            fn AXIsProcessTrusted() -> bool;
+        }
+        unsafe { AXIsProcessTrusted() }
+    }
+    #[cfg(not(target_os = "macos"))]
+    {
+        true
+    }
+}
+
+#[tauri::command]
+fn request_accessibility_permissions() -> bool {
+    #[cfg(target_os = "macos")]
+    {
+        #[link(name = "ApplicationServices", kind = "framework")]
+        extern "C" {
+            fn AXIsProcessTrustedWithOptions(options: *const std::ffi::c_void) -> bool;
+            fn CFDictionaryCreate(
+                allocator: *const std::ffi::c_void,
+                keys: *const *const std::ffi::c_void,
+                values: *const *const std::ffi::c_void,
+                numValues: isize,
+                keyCallBacks: *const std::ffi::c_void,
+                valueCallBacks: *const std::ffi::c_void,
+            ) -> *const std::ffi::c_void;
+            static kAXTrustedCheckOptionPrompt: *const std::ffi::c_void;
+            static kCFBooleanTrue: *const std::ffi::c_void;
+            static kCFTypeDictionaryKeyCallBacks: *const std::ffi::c_void;
+            static kCFTypeDictionaryValueCallBacks: *const std::ffi::c_void;
+            fn CFRelease(obj: *const std::ffi::c_void);
+        }
+
+        unsafe {
+            let keys = [kAXTrustedCheckOptionPrompt];
+            let values = [kCFBooleanTrue];
+            let options = CFDictionaryCreate(
+                std::ptr::null(),
+                keys.as_ptr(),
+                values.as_ptr(),
+                1,
+                kCFTypeDictionaryKeyCallBacks,
+                kCFTypeDictionaryValueCallBacks,
+            );
+            let result = AXIsProcessTrustedWithOptions(options);
+            CFRelease(options);
+            result
+        }
+    }
+    #[cfg(not(target_os = "macos"))]
+    {
+        true
+    }
+}
+
+#[tauri::command]
+fn open_accessibility_settings() {
+    #[cfg(target_os = "macos")]
+    {
+        use std::process::Command;
+        let _ = Command::new("open")
+            .arg("x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility")
+            .spawn();
+    }
+}
+
+#[tauri::command]
 fn hide_overlay(app: tauri::AppHandle) -> Result<(), String> {
     use tauri::Manager;
 
@@ -334,6 +405,15 @@ fn hide_overlay(app: tauri::AppHandle) -> Result<(), String> {
 
     if let Err(e) = overlay.hide() {
         eprintln!("hide overlay failed: {:?}", e);
+    }
+    Ok(())
+}
+
+#[tauri::command]
+fn hide_main_window(app: tauri::AppHandle) -> Result<(), String> {
+    use tauri::Manager;
+    if let Some(win) = app.get_webview_window("main") {
+        let _ = win.hide();
     }
     Ok(())
 }
@@ -456,6 +536,10 @@ pub fn run() {
             update_shortcut,
             show_overlay_status,
             hide_overlay,
+            check_accessibility_permissions,
+            request_accessibility_permissions,
+            open_accessibility_settings,
+            hide_main_window,
         ])
         .build(tauri::generate_context!())
         .expect("error while building tauri application");
