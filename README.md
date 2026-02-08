@@ -1,7 +1,7 @@
 # AItoType 🎙️
 
 <p align="center">
-  <img src="docs/screenshots/app-icon.png" alt="AItoType Icon" width="128" height="128" />
+  <img src="icon.png" alt="AItoType Icon" width="128" height="128" />
 </p>
 
 AItoType 是一个开源、免费的桌面端语音转文字工具，基于 **Tauri v2** 构建，旨在提供极致轻量、高效的语音输入体验。
@@ -11,6 +11,13 @@ AItoType 是一个开源、免费的桌面端语音转文字工具，基于 **Ta
 > ⚠️ **声明**：本项目完全开源免费，供大家学习与使用。**严禁用于任何商业盈利行为**。
 
 ---
+
+## 📖 TLDR.
+
+- **首次配置**：首次打开需进入配置界面，分两步完成：(1) 选择供应商；(2) 填入 API Key。
+- **界面交互**：点击主界面“录制”按钮开始，再次点击停止。识别结果将显示在界面上并自动写入剪贴板。
+- **后台/快捷键模式**：支持关闭主窗口后台运行。通过预设快捷键唤醒录制，再次按键停止。识别完成后自动复制内容，直接粘贴 (Ctrl+V) 即可。
+- **供应商**：目前支持 OpenRouter 和 SiliconFlow。OpenRouter 默认使用 Gemini 3.0 Flash，SiliconFlow 默认使用 TeleAI 模型。
 
 ## 📸 界面预览
 
@@ -41,7 +48,7 @@ AItoType 是一个开源、免费的桌面端语音转文字工具，基于 **Ta
 
 - **Core**: [Rust](https://www.rust-lang.org/) (Tauri v2, cpal, hound, arboard, enigo)
 - **Frontend**: Vanilla JS + CSS (无框架，追求极致轻量与性能)
-- **API**: OpenRouter (兼容 OpenAI 格式)
+- **API**: OpenRouter / SiliconFlow (兼容 OpenAI 格式)
 
 ## 🚀 快速开始
 
@@ -232,19 +239,20 @@ codesign --verify --deep --strict --verbose=2 "src/aitotype/src-tauri/target/rel
 
 首次启动后，请点击主界面底部的 **设置图标 (⚙️)** 进行配置：
 
-1. **OpenRouter API Key**: 填入你的 Key（前往 [OpenRouter.ai](https://openrouter.ai/) 获取）。
-2. **Model**: 默认为 `google/gemini-3-flash-preview`，你也可以填入其他已订阅的模型 ID。
-3. **Global Shortcut**: 点击录制你习惯的快捷键（如 `Cmd+Shift+M` 或 `F1`）。
-4. **Auto-Copy**: 开启后，识别结果会自动进入剪贴板。
+1. **Supplier**: 选择 OpenRouter 或 SiliconFlow。
+2. **API Key**: 填入对应平台的 Key（[OpenRouter.ai](https://openrouter.ai/) 或 [SiliconFlow](https://docs.siliconflow.cn/)）。
+3. **Model**: OpenRouter 默认 `google/gemini-3-flash-preview`，SiliconFlow 默认使用 TeleAI 模型。你也可以填入其他支持的模型 ID。
+4. **Global Shortcut**: 点击录制你习惯的快捷键（如 `Cmd+M` 或 `F1`）。
+5. **Auto-Copy**: 开启后，识别结果会自动进入剪贴板。
 
 **注意**：配置会自动保存到本地，重启应用无需重新输入。
 
 ## 🔑 API Key 安全说明
 
-- 你的 OpenRouter API Key 会保存在**本机应用配置目录**，不会写入本仓库代码。
+- 你的 API Key 会保存在**本机应用配置目录**，不会写入本仓库代码。
 - 只要你不手动把该配置文件提交到 GitHub，发布仓库不会泄露你的 Key。
 - 当前实现为本地明文保存，建议你：
-  - 使用低权限/限额的 OpenRouter Key；
+  - 使用低权限/限额的 API Key；
   - 定期轮换 Key；
   - 后续升级为 Keychain 存储（更安全）。
 
@@ -253,7 +261,7 @@ codesign --verify --deep --strict --verbose=2 "src/aitotype/src-tauri/target/rel
 ### 首次使用（建议）
 
 1. 打开应用，进入 **Settings** 页面。
-2. 填写 `OpenRouter API Key` 与 `Model`，点击 **Save Changes**。
+2. 选择 **Supplier**，填写对应的 **API Key** 与 **Model**，点击 **Save Changes**。
 3. 设置你习惯的全局快捷键（默认 `Alt+Space`）。
 4. 按需开启 `Auto-Copy Result`。
 

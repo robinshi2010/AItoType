@@ -48,6 +48,34 @@ struct OverlayStatusPayload {
     status: String,
 }
 
+fn show_or_create_main_window(app: &tauri::AppHandle) -> Result<(), String> {
+    use tauri::Manager;
+
+    if let Some(win) = app.get_webview_window("main") {
+        let _ = win.unminimize();
+        let _ = win.show();
+        let _ = win.set_focus();
+        return Ok(());
+    }
+
+    let window_config = app
+        .config()
+        .app
+        .windows
+        .iter()
+        .find(|w| w.label == "main")
+        .ok_or_else(|| "main window config not found".to_string())?;
+
+    let win = tauri::WebviewWindowBuilder::from_config(app, window_config)
+        .map_err(|e| format!("recreate main window builder failed: {}", e))?
+        .build()
+        .map_err(|e| format!("recreate main window failed: {}", e))?;
+
+    let _ = win.show();
+    let _ = win.set_focus();
+    Ok(())
+}
+
 /// 开始录音
 #[tauri::command]
 fn start_recording() -> Result<(), String> {
@@ -312,9 +340,8 @@ pub fn run() {
                     match event.id.as_ref() {
                         "quit" => app.exit(0),
                         "show" => {
-                            if let Some(win) = app.get_webview_window("main") {
-                                let _ = win.show();
-                                let _ = win.set_focus();
+                            if let Err(e) = show_or_create_main_window(app) {
+                                eprintln!("show main window failed: {}", e);
                             }
                         }
                         _ => {}
@@ -357,6 +384,14 @@ pub fn run() {
 
             Ok(())
         })
+        .on_window_event(|window, event| {
+            if window.label() == "main" {
+                if let tauri::WindowEvent::CloseRequested { api, .. } = event {
+                    api.prevent_close();
+                    let _ = window.hide();
+                }
+            }
+        })
         .manage(AppState::default())
         .invoke_handler(tauri::generate_handler![
             start_recording,
@@ -375,6 +410,11 @@ pub fn run() {
             show_overlay_status,
             hide_overlay,
         ])
-        .run(tauri::generate_context!())
-        .expect("error while running tauri application");
+        .build(tauri::generate_context!())
+        .expect("error while building tauri application")
+        .run(|app, event| {
+            if let tauri::RunEvent::Reopen { .. } = event {
+                let _ = show_or_create_main_window(app);
+            }
+        });
 }
