@@ -188,7 +188,7 @@ async fn stop_and_transcribe(state: State<'_, AppState>) -> Result<String, Strin
 
     let transcribe_result = stt::transcribe(&file_path, &config).await;
 
-    // 清理临时录音文件，避免在 /tmp 持续堆积。
+    // 清理系统临时目录中的录音文件，避免持续堆积。
     if let Err(e) = std::fs::remove_file(&file_path) {
         eprintln!("清理临时录音文件失败 {}: {:?}", file_path, e);
     }

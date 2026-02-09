@@ -8,7 +8,7 @@ use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
 use hound::{WavSpec, WavWriter};
 use std::sync::{Arc, Mutex, atomic::{AtomicBool, Ordering}};
 use std::thread;
-use std::time::Duration;
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 // 全局录音状态
 lazy_static::lazy_static! {
@@ -20,6 +20,25 @@ lazy_static::lazy_static! {
 /// 获取录音状态
 pub fn is_recording() -> bool {
     IS_RECORDING.load(Ordering::SeqCst)
+}
+
+fn build_output_path() -> Result<String, String> {
+    let mut temp_dir = std::env::temp_dir();
+    std::fs::create_dir_all(&temp_dir)
+        .map_err(|e| format!("创建临时目录失败: {:?}", e))?;
+
+    let timestamp = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map_err(|e| format!("系统时间异常: {:?}", e))?
+        .as_millis();
+
+    temp_dir.push(format!(
+        "aitotype_recording_{}_{}.wav",
+        std::process::id(),
+        timestamp
+    ));
+
+    Ok(temp_dir.to_string_lossy().to_string())
 }
 
 /// 开始录音
@@ -38,14 +57,8 @@ pub fn start_recording() -> Result<(), String> {
         }
     }
 
-    // 创建输出文件路径
-    let output_path = format!(
-        "/tmp/aitotype_recording_{}.wav",
-        std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .unwrap()
-            .as_secs()
-    );
+    // 使用系统临时目录，兼容 macOS / Linux / Windows。
+    let output_path = build_output_path()?;
 
     // 保存路径
     {
@@ -198,9 +211,8 @@ pub fn get_audio_level() -> f32 {
 
 /// 简单的伪随机数生成
 fn rand_simple() -> f32 {
-    use std::time::SystemTime;
     let nanos = SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
+        .duration_since(UNIX_EPOCH)
         .unwrap()
         .subsec_nanos();
     (nanos % 1000) as f32 / 1000.0
