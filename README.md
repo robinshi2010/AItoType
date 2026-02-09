@@ -30,7 +30,7 @@ AItoType 是一个开源、免费的桌面端语音转文字工具，基于 **Ta
 
 ## ✨ 功能特性
 
-- **全局快捷键唤起**：默认 `Alt+Space` 一键录音，再次按下即可停止并识别。
+- **全局快捷键唤起**：默认 `Alt+Space`（Windows 默认 `Ctrl+Shift+Space`）一键录音，再次按下即可停止并识别。
 - **无缝嵌入工作流**：
   - **自动写入（自动粘贴）**：识别完成后，结果自动“打字”到你当前光标所在的输入框（Chatbox、文档、编辑器等）。
   - **自动复制**：可选自动复制结果到剪贴板。
@@ -169,7 +169,7 @@ npm run tauri build
 
 1. 打开应用，进入 **Settings** 页面。
 2. 选择 **Supplier**，填写对应的 **API Key** 与 **Model**，点击 **Save Changes**。
-3. 设置你习惯的全局快捷键（默认 `Alt+Space`）。
+3. 设置你习惯的全局快捷键（默认 `Alt+Space`，Windows 默认 `Ctrl+Shift+Space`）。
 4. 按需开启 `Auto-Copy Result`。
 
 ### 日常使用流程

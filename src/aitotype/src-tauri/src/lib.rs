@@ -10,6 +10,7 @@ mod keyboard;
 mod stt;
 
 use serde::Serialize;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Mutex;
 use stt::SttConfig;
 use tauri::State;
@@ -65,6 +66,7 @@ fn has_resolved_api_key(config: &SttConfig) -> bool {
 /// 应用状态
 pub struct AppState {
     stt_config: Mutex<SttConfig>,
+    shortcut_plugin_ready: AtomicBool,
 }
 
 impl Default for AppState {
@@ -79,7 +81,19 @@ impl Default for AppState {
 
         Self {
             stt_config: Mutex::new(normalize_stt_config(config)),
+            shortcut_plugin_ready: AtomicBool::new(false),
         }
+    }
+}
+
+fn default_global_shortcut() -> &'static str {
+    #[cfg(target_os = "windows")]
+    {
+        "Ctrl+Shift+Space"
+    }
+    #[cfg(not(target_os = "windows"))]
+    {
+        "Alt+Space"
     }
 }
 
@@ -274,7 +288,17 @@ async fn test_connection(state: State<'_, AppState>) -> Result<String, String> {
 
 /// 更新全局快捷键
 #[tauri::command]
-fn update_shortcut(app: tauri::AppHandle, shortcut: String) -> Result<(), String> {
+fn update_shortcut(
+    app: tauri::AppHandle,
+    state: State<'_, AppState>,
+    shortcut: String,
+) -> Result<(), String> {
+    if !state.shortcut_plugin_ready.load(Ordering::Acquire) {
+        return Err("global shortcut plugin is not ready".to_string());
+    }
+
+    let shortcut = shortcut.trim().to_string();
+
     // 忽略 unregister 错误（可能本来就没有）
     let _ = app.global_shortcut().unregister_all();
 
@@ -284,6 +308,11 @@ fn update_shortcut(app: tauri::AppHandle, shortcut: String) -> Result<(), String
             .map_err(|e| e.to_string())?;
     }
     Ok(())
+}
+
+#[tauri::command]
+fn is_shortcut_ready(state: State<'_, AppState>) -> bool {
+    state.shortcut_plugin_ready.load(Ordering::Acquire)
 }
 
 #[tauri::command]
@@ -525,15 +554,14 @@ pub fn run() {
                 let _ = overlay.hide();
             }
 
-            // --- Global Shortcut (Alt+Space) ---
+            // --- Global Shortcut ---
             #[cfg(desktop)]
             {
                 use tauri::Emitter;
                 use tauri_plugin_global_shortcut::ShortcutState;
 
-                app.handle().plugin(
+                let plugin_result = app.handle().plugin(
                     tauri_plugin_global_shortcut::Builder::new()
-                        .with_shortcut("Alt+Space")?
                         .with_handler(|app, _shortcut, event| {
                             if event.state == ShortcutState::Pressed {
                                 let background = app
@@ -548,7 +576,24 @@ pub fn run() {
                             }
                         })
                         .build(),
-                )?;
+                );
+
+                match plugin_result {
+                    Ok(_) => {
+                        let state = app.state::<AppState>();
+                        state.shortcut_plugin_ready.store(true, Ordering::Release);
+                        if let Err(e) = app.global_shortcut().register(default_global_shortcut()) {
+                            eprintln!(
+                                "register default global shortcut ({}) failed: {}",
+                                default_global_shortcut(),
+                                e
+                            );
+                        }
+                    }
+                    Err(e) => {
+                        eprintln!("init global shortcut plugin failed: {}", e);
+                    }
+                }
             }
 
             Ok(())
@@ -568,6 +613,7 @@ pub fn run() {
             save_stt_config,
             test_connection,
             update_shortcut,
+            is_shortcut_ready,
             show_overlay_status,
             hide_overlay,
             check_accessibility_permissions,

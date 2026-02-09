@@ -15,6 +15,9 @@ const API_KEY_STORAGE_KEYS = {
   [PROVIDER_OPENROUTER]: 'aitotype_api_key_openrouter',
   [PROVIDER_SILICONFLOW]: 'aitotype_api_key_siliconflow'
 };
+const DEFAULT_SHORTCUT = /windows/i.test(navigator.userAgent || navigator.platform || '')
+  ? 'Ctrl+Shift+Space'
+  : 'Alt+Space';
 
 // ============ State ============
 const state = {
@@ -24,6 +27,7 @@ const state = {
   audioLevelTimer: null,
   shortcutUnlisten: null,
   shortcutCaptureActive: false,
+  shortcutPluginReady: false,
   pendingShortcutContext: null,
   backgroundSession: false,
   lastShortcutToggleAt: 0,
@@ -556,6 +560,8 @@ function normalizeShortcut(modifiers, rawKey) {
 
 async function setShortcut(shortcut) {
   if (!shortcut || shortcut.trim().length === 0) return;
+  const ready = await ensureShortcutPluginReady();
+  if (!ready) return;
 
   try {
     await invoke('update_shortcut', { shortcut });
@@ -564,6 +570,9 @@ async function setShortcut(shortcut) {
 }
 
 async function disableGlobalShortcut() {
+  const ready = await ensureShortcutPluginReady();
+  if (!ready) return;
+
   try {
     await invoke('update_shortcut', { shortcut: '' });
   } catch (e) {
@@ -571,12 +580,43 @@ async function disableGlobalShortcut() {
   }
 }
 
-function initShortcutRecorder() {
+function getSavedShortcut() {
+  const stored = localStorage.getItem('aitotype_shortcut');
+  if (/windows/i.test(navigator.userAgent || navigator.platform || '') && (!stored || stored === 'Alt+Space')) {
+    localStorage.setItem('aitotype_shortcut', DEFAULT_SHORTCUT);
+    return DEFAULT_SHORTCUT;
+  }
+  return stored || DEFAULT_SHORTCUT;
+}
+
+async function ensureShortcutPluginReady(maxAttempts = 30, delayMs = 100) {
+  if (state.shortcutPluginReady) return true;
+
+  for (let i = 0; i < maxAttempts; i++) {
+    try {
+      const ready = await invoke('is_shortcut_ready');
+      if (ready) {
+        state.shortcutPluginReady = true;
+        return true;
+      }
+    } catch (e) {
+      console.error('Check shortcut plugin ready failed', e);
+      break;
+    }
+
+    await new Promise((resolve) => setTimeout(resolve, delayMs));
+  }
+
+  console.warn('Global shortcut plugin is not ready, skip shortcut registration');
+  return false;
+}
+
+async function initShortcutRecorder() {
   if (!el.shortcutRecorder) return;
 
-  const saved = localStorage.getItem('aitotype_shortcut') || 'Alt+Space';
+  const saved = getSavedShortcut();
   if (el.shortcutLabel) el.shortcutLabel.textContent = saved;
-  setShortcut(saved);
+  await setShortcut(saved);
 
   if (el.shortcutLabel) el.shortcutLabel.style.opacity = 1;
 
@@ -584,7 +624,7 @@ function initShortcutRecorder() {
     if (state.shortcutCaptureActive) return;
     state.shortcutCaptureActive = true;
 
-    const previousShortcut = localStorage.getItem('aitotype_shortcut') || 'Alt+Space';
+    const previousShortcut = getSavedShortcut();
     el.shortcutRecorder.classList.add('recording');
     if (el.shortcutLabel) el.shortcutLabel.textContent = 'Press keys...';
     await disableGlobalShortcut();
@@ -647,7 +687,7 @@ async function init() {
   }
 
   // Shortcut
-  initShortcutRecorder();
+  await initShortcutRecorder();
 
   // Navigation
   el.tabs.forEach(tab => {
