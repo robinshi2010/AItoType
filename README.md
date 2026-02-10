@@ -19,7 +19,7 @@ AItoType 是一个开源、免费的桌面端语音转文字工具，基于 **Ta
 - **后台/快捷键模式**：支持关闭主窗口后台运行。通过预设快捷键唤醒录制，再次按键停止。识别完成后会自动写入当前光标所在输入框（自动粘贴）。
 - **历史记录**：History 页面按条目卡片展示，每条可点击直接复制内容。
 - **权限引导**：首次使用会引导完成麦克风与辅助功能授权，确保可录音和后台自动写入。
-- **供应商**：目前支持 OpenRouter 和 SiliconFlow。OpenRouter 默认使用 Gemini 3.0 Flash，SiliconFlow 默认使用 TeleAI 模型。**划重点，现在硅基流动的TeleAI/TeleSpeechASR完全免费，速度快且随便用。**
+- **供应商**：目前支持 OpenRouter 和 [SiliconFlow](https://cloud.siliconflow.cn/i/zbtzfOmG) 。OpenRouter 默认使用 Gemini 3.0 Flash，[SiliconFlow](https://cloud.siliconflow.cn/i/zbtzfOmG)  默认使用 TeleAI 模型。**划重点，现在硅基流动的TeleAI/TeleSpeechASR完全免费，速度快且随便用。**
 
 ## 📸 界面预览
 
