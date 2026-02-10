@@ -204,4 +204,6 @@ npm run tauri build
 
 ---
 
+[![Star History Chart](https://api.star-history.com/svg?repos=robinshi2010/AItoType&type=Date)](https://star-history.com/#robinshi2010/AItoType&Date)
+
 Made with ❤️ by Robin. Enjoy typing with your voice!
