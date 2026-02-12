@@ -390,11 +390,44 @@ async function stopAndTranscribeOnly() {
   }
 }
 
-// ============ Audio Animation (Simulated) ============
+// ============ Audio Animation (Real Level) ============
 function startAudioAnim() {
-  // Can add volume visualization here later
+  if (!el.recordTrigger || state.audioLevelTimer) return;
+
+  state.audioLevelTimer = setInterval(async () => {
+    if (state.status !== 'recording') {
+      stopsAudioAnim();
+      return;
+    }
+
+    try {
+      const level = Number(await invoke('get_audio_level'));
+      const safeLevel = Number.isFinite(level) ? Math.max(0, Math.min(1, level)) : 0;
+      const scale = 1 + safeLevel * 0.14;
+      const glowSize = 18 + safeLevel * 34;
+      const glowAlpha = 0.2 + safeLevel * 0.45;
+
+      el.recordTrigger.style.transform = `scale(${scale.toFixed(3)})`;
+      el.recordTrigger.style.boxShadow = `
+        inset 0 0 ${12 + safeLevel * 24}px rgba(255, 255, 255, ${0.06 + safeLevel * 0.14}),
+        inset 0 0 ${4 + safeLevel * 10}px rgba(255, 255, 255, ${0.12 + safeLevel * 0.18}),
+        0 18px 40px rgba(0, 0, 0, 0.4),
+        0 0 ${glowSize.toFixed(1)}px rgba(10, 132, 255, ${glowAlpha.toFixed(3)})
+      `;
+    } catch (_) { }
+  }, 80);
 }
-function stopsAudioAnim() { }
+function stopsAudioAnim() {
+  if (state.audioLevelTimer) {
+    clearInterval(state.audioLevelTimer);
+    state.audioLevelTimer = null;
+  }
+
+  if (el.recordTrigger) {
+    el.recordTrigger.style.transform = '';
+    el.recordTrigger.style.boxShadow = '';
+  }
+}
 
 // ============ Result Sheet ============
 function showResult(text) {

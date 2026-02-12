@@ -6,7 +6,10 @@
 
 use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
 use hound::{WavSpec, WavWriter};
-use std::sync::{Arc, Mutex, atomic::{AtomicBool, Ordering}};
+use std::sync::{
+    atomic::{AtomicBool, AtomicU32, Ordering},
+    Arc, Mutex,
+};
 use std::thread;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
@@ -15,7 +18,11 @@ lazy_static::lazy_static! {
     static ref IS_RECORDING: Arc<AtomicBool> = Arc::new(AtomicBool::new(false));
     static ref CURRENT_PATH: Arc<Mutex<Option<String>>> = Arc::new(Mutex::new(None));
     static ref RECORDING_DONE: Arc<AtomicBool> = Arc::new(AtomicBool::new(true));
+    static ref AUDIO_LEVEL: Arc<AtomicU32> = Arc::new(AtomicU32::new(0.0_f32.to_bits()));
 }
+
+const AUDIO_LEVEL_GAIN: f32 = 3.0;
+const AUDIO_LEVEL_EMA_ALPHA: f32 = 0.3;
 
 /// 获取录音状态
 pub fn is_recording() -> bool {
@@ -68,6 +75,7 @@ pub fn start_recording() -> Result<(), String> {
 
     IS_RECORDING.store(true, Ordering::SeqCst);
     RECORDING_DONE.store(false, Ordering::SeqCst);
+    AUDIO_LEVEL.store(0.0_f32.to_bits(), Ordering::Relaxed);
 
     // 在新线程中进行录音
     thread::spawn(move || {
@@ -127,6 +135,12 @@ fn do_recording(output_path: &str) -> Result<(), String> {
                                 }
                             }
                         }
+
+                        if !samples.is_empty() {
+                            let sum_sq: f32 = samples.iter().map(|s| s * s).sum();
+                            let rms = (sum_sq / samples.len() as f32).sqrt();
+                            update_audio_level(rms);
+                        }
                     }
                 },
                 err_fn,
@@ -145,6 +159,18 @@ fn do_recording(output_path: &str) -> Result<(), String> {
                                     let _ = w.write_sample(sample);
                                 }
                             }
+                        }
+
+                        if !samples.is_empty() {
+                            let sum_sq: f32 = samples
+                                .iter()
+                                .map(|s| {
+                                    let normalized = *s as f32 / i16::MAX as f32;
+                                    normalized * normalized
+                                })
+                                .sum();
+                            let rms = (sum_sq / samples.len() as f32).sqrt();
+                            update_audio_level(rms);
                         }
                     }
                 },
@@ -173,7 +199,20 @@ fn do_recording(output_path: &str) -> Result<(), String> {
     }
 
     println!("✅ 录音完成: {}", output_path);
+    AUDIO_LEVEL.store(0.0_f32.to_bits(), Ordering::Relaxed);
     Ok(())
+}
+
+fn update_audio_level(rms: f32) {
+    let normalized = (rms * AUDIO_LEVEL_GAIN).clamp(0.0, 1.0);
+    let prev = f32::from_bits(AUDIO_LEVEL.load(Ordering::Relaxed));
+    let smoothed = AUDIO_LEVEL_EMA_ALPHA * normalized + (1.0 - AUDIO_LEVEL_EMA_ALPHA) * prev;
+    let level = if smoothed.is_finite() {
+        smoothed.clamp(0.0, 1.0)
+    } else {
+        0.0
+    };
+    AUDIO_LEVEL.store(level.to_bits(), Ordering::Relaxed);
 }
 
 /// 停止录音并返回音频数据路径
@@ -184,6 +223,7 @@ pub fn stop_recording() -> Result<String, String> {
 
     // 停止录音
     IS_RECORDING.store(false, Ordering::SeqCst);
+    AUDIO_LEVEL.store(0.0_f32.to_bits(), Ordering::Relaxed);
     
     // 等待录音线程完成
     let mut wait_count = 0;
@@ -205,15 +245,5 @@ pub fn get_audio_level() -> f32 {
     if !IS_RECORDING.load(Ordering::SeqCst) {
         return 0.0;
     }
-    // 返回模拟值
-    0.3 + (rand_simple() * 0.5)
-}
-
-/// 简单的伪随机数生成
-fn rand_simple() -> f32 {
-    let nanos = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .unwrap()
-        .subsec_nanos();
-    (nanos % 1000) as f32 / 1000.0
+    f32::from_bits(AUDIO_LEVEL.load(Ordering::Relaxed))
 }
