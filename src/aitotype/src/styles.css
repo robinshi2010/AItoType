@@ -600,6 +600,46 @@ select:focus {
   transform: none;
 }
 
+.spatial-btn.secondary {
+  width: 100%;
+  height: 50px;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.1);
+}
+
+.spatial-btn.secondary:hover {
+  background: rgba(255, 255, 255, 0.14);
+}
+
+.test-result {
+  margin-top: 10px;
+  min-height: 18px;
+  border-radius: 10px;
+  padding: 10px 12px;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.test-result.loading {
+  color: rgba(255, 255, 255, 0.75);
+  background: rgba(142, 142, 147, 0.2);
+  border: 1px solid rgba(142, 142, 147, 0.35);
+}
+
+.test-result.success {
+  color: #30D158;
+  background: rgba(48, 209, 88, 0.12);
+  border: 1px solid rgba(48, 209, 88, 0.3);
+}
+
+.test-result.error {
+  color: #FF453A;
+  background: rgba(255, 69, 58, 0.14);
+  border: 1px solid rgba(255, 69, 58, 0.3);
+}
+
 .form-footer {
   display: flex;
   flex-direction: column;

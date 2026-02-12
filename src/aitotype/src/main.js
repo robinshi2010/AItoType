@@ -70,6 +70,8 @@ const el = {
   apiKeyLabel: document.getElementById('api-key-label'),
   apiKeyInput: document.getElementById('api-key-input'),
   modelInput: document.getElementById('model-input'),
+  testConnectionBtn: document.getElementById('test-connection-btn'),
+  testConnectionResult: document.getElementById('test-connection-result'),
   settingsForm: document.getElementById('settings-form'),
   settingsStatus: document.getElementById('settings-status'),
   settingsSaveBtn: document.querySelector('#settings-form button[type="submit"]'),
@@ -570,6 +572,44 @@ function buildSttConfigFromUi() {
   };
 }
 
+function formatProviderName(provider) {
+  return normalizeProvider(provider) === PROVIDER_SILICONFLOW ? 'SiliconFlow' : 'OpenRouter';
+}
+
+function renderConnectionTestResult(kind, text) {
+  if (!el.testConnectionResult) return;
+  el.testConnectionResult.classList.remove('hidden', 'loading', 'success', 'error');
+  el.testConnectionResult.classList.add(kind);
+  el.testConnectionResult.textContent = text;
+}
+
+async function testConnection() {
+  if (!el.testConnectionBtn) return;
+
+  el.testConnectionBtn.disabled = true;
+  const originalText = el.testConnectionBtn.textContent;
+  el.testConnectionBtn.textContent = 'Testing...';
+  renderConnectionTestResult('loading', '正在测试连接，请稍候...');
+
+  try {
+    await syncConfigFromUi();
+    const result = await invoke('test_connection');
+    const providerName = formatProviderName(result.provider);
+    const details = `${providerName} / ${result.model} / ${result.latency_ms}ms`;
+
+    if (result.success) {
+      renderConnectionTestResult('success', `✅ ${result.message} (${details})`);
+    } else {
+      renderConnectionTestResult('error', `❌ ${result.message} (${details})`);
+    }
+  } catch (e) {
+    renderConnectionTestResult('error', `❌ 连接测试失败: ${e.toString()}`);
+  } finally {
+    el.testConnectionBtn.disabled = false;
+    el.testConnectionBtn.textContent = originalText || 'Test Connection';
+  }
+}
+
 async function syncConfigFromUi() {
   if (!el.providerSelect || !el.apiKeyInput || !el.modelInput) return;
   const config = buildSttConfigFromUi();
@@ -865,6 +905,9 @@ async function init() {
   if (el.settingsForm) el.settingsForm.addEventListener('submit', saveConfig);
   if (el.providerSelect) el.providerSelect.addEventListener('change', onProviderChange);
   if (el.apiKeyInput) el.apiKeyInput.addEventListener('input', onApiKeyInput);
+  if (el.testConnectionBtn) {
+    el.testConnectionBtn.addEventListener('click', testConnection);
+  }
 
   if (el.recordModeSwitch) {
     el.recordModeSwitch.addEventListener('change', async () => {

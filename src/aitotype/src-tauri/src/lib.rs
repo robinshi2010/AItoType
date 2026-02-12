@@ -108,6 +108,23 @@ struct OverlayStatusPayload {
     status: String,
 }
 
+#[derive(Clone, Serialize)]
+struct ConnectionTestResultPayload {
+    success: bool,
+    provider: String,
+    model: String,
+    message: String,
+    error_type: Option<String>,
+    latency_ms: u64,
+}
+
+fn parse_typed_error(input: &str) -> (String, String) {
+    if let Some((error_type, message)) = input.split_once('|') {
+        return (error_type.to_string(), message.to_string());
+    }
+    ("unknown".to_string(), input.to_string())
+}
+
 fn show_or_create_main_window(app: &tauri::AppHandle) -> Result<(), String> {
     use tauri::Manager;
 
@@ -265,26 +282,52 @@ fn save_stt_config(
 
 /// 测试 API 连接
 #[tauri::command]
-async fn test_connection(state: State<'_, AppState>) -> Result<String, String> {
+async fn test_connection(
+    state: State<'_, AppState>,
+) -> Result<ConnectionTestResultPayload, String> {
     let config = state
         .stt_config
         .lock()
         .map_err(|e| format!("获取配置失败: {:?}", e))?
         .clone();
     let config = normalize_stt_config(config);
+    let provider = config.provider.clone();
+    let model = config.model.clone();
+    let started_at = std::time::Instant::now();
 
     if !has_resolved_api_key(&config) {
         let env_key = stt::env_key_for_provider(&config.provider);
-        return Err(format!(
-            "API Key 不能为空（可通过环境变量 {} 提供）",
-            env_key
-        ));
+        return Ok(ConnectionTestResultPayload {
+            success: false,
+            provider,
+            model,
+            message: format!("API Key 不能为空（可通过环境变量 {} 提供）", env_key),
+            error_type: Some(stt::CONNECTION_ERROR_AUTH_FAILED.to_string()),
+            latency_ms: started_at.elapsed().as_millis() as u64,
+        });
     }
 
-    Ok(format!(
-        "连接测试成功 - Provider: {}, Model: {}",
-        config.provider, config.model
-    ))
+    match stt::test_connection(&config).await {
+        Ok(_) => Ok(ConnectionTestResultPayload {
+            success: true,
+            provider,
+            model,
+            message: "连接测试成功".to_string(),
+            error_type: None,
+            latency_ms: started_at.elapsed().as_millis() as u64,
+        }),
+        Err(err) => {
+            let (error_type, message) = parse_typed_error(&err);
+            Ok(ConnectionTestResultPayload {
+                success: false,
+                provider,
+                model,
+                message,
+                error_type: Some(error_type),
+                latency_ms: started_at.elapsed().as_millis() as u64,
+            })
+        }
+    }
 }
 
 /// 更新全局快捷键

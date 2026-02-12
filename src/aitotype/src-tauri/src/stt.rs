@@ -3,6 +3,7 @@
 //! 支持 OpenRouter 与 SiliconFlow 两个 Provider
 
 use base64::{engine::general_purpose::STANDARD, Engine as _};
+use reqwest::StatusCode;
 use serde::{Deserialize, Serialize};
 use std::fs::File;
 use std::io::Read;
@@ -19,6 +20,11 @@ pub const DEFAULT_SILICONFLOW_MODEL: &str = "TeleAI/TeleSpeechASR";
 pub const DEFAULT_OPENROUTER_BASE_URL: &str = "https://openrouter.ai/api/v1";
 /// SiliconFlow 默认 API URL
 pub const DEFAULT_SILICONFLOW_BASE_URL: &str = "https://api.siliconflow.cn/v1";
+pub const CONNECTION_ERROR_AUTH_FAILED: &str = "auth_failed";
+pub const CONNECTION_ERROR_NETWORK_FAILED: &str = "network_failed";
+pub const CONNECTION_ERROR_MODEL_NOT_FOUND: &str = "model_not_found";
+pub const CONNECTION_ERROR_QUOTA_EXCEEDED: &str = "quota_exceeded";
+pub const CONNECTION_ERROR_UNKNOWN: &str = "unknown";
 
 fn default_provider() -> String {
     PROVIDER_OPENROUTER.to_string()
@@ -27,6 +33,9 @@ fn default_provider() -> String {
 fn default_record_mode() -> String {
     "toggle".to_string()
 }
+
+
+
 
 pub fn normalize_provider(provider: &str) -> String {
     let normalized = provider.trim().to_lowercase();
@@ -52,6 +61,7 @@ pub fn default_model_for_provider(provider: &str) -> &'static str {
         DEFAULT_OPENROUTER_MODEL
     }
 }
+
 
 pub fn env_key_for_provider(provider: &str) -> &'static str {
     if provider == PROVIDER_SILICONFLOW {
@@ -146,6 +156,190 @@ fn resolve_api_key(config: &SttConfig, provider: &str) -> Result<String, String>
             env_key
         )),
     }
+}
+
+
+
+fn classify_http_error(status: StatusCode, body: &str) -> String {
+    let lower = body.to_lowercase();
+
+    let error_type = if status == StatusCode::UNAUTHORIZED || status == StatusCode::FORBIDDEN {
+        CONNECTION_ERROR_AUTH_FAILED
+    } else if status == StatusCode::PAYMENT_REQUIRED
+        || status == StatusCode::TOO_MANY_REQUESTS
+        || lower.contains("insufficient")
+        || lower.contains("quota")
+        || lower.contains("credit")
+        || lower.contains("rate limit")
+        || lower.contains("余额不足")
+        || lower.contains("额度不足")
+    {
+        CONNECTION_ERROR_QUOTA_EXCEEDED
+    } else if status == StatusCode::NOT_FOUND
+        || lower.contains("model not found")
+        || lower.contains("unknown model")
+        || lower.contains("invalid model")
+        || lower.contains("does not exist")
+        || lower.contains("模型不存在")
+    {
+        CONNECTION_ERROR_MODEL_NOT_FOUND
+    } else {
+        CONNECTION_ERROR_UNKNOWN
+    };
+
+    match error_type {
+        CONNECTION_ERROR_AUTH_FAILED => format!(
+            "{}|鉴权失败，请检查 API Key 是否正确",
+            CONNECTION_ERROR_AUTH_FAILED
+        ),
+        CONNECTION_ERROR_QUOTA_EXCEEDED => format!(
+            "{}|额度不足或请求过于频繁，请检查账户余额与速率限制",
+            CONNECTION_ERROR_QUOTA_EXCEEDED
+        ),
+        CONNECTION_ERROR_MODEL_NOT_FOUND => format!(
+            "{}|模型不存在，请检查模型名称是否正确",
+            CONNECTION_ERROR_MODEL_NOT_FOUND
+        ),
+        _ => format!(
+            "{}|API 返回错误 {}: {}",
+            CONNECTION_ERROR_UNKNOWN,
+            status.as_u16(),
+            body
+        ),
+    }
+}
+
+fn classify_network_error(err: &reqwest::Error) -> String {
+    if err.is_timeout() {
+        return format!(
+            "{}|网络超时（10 秒），请检查网络连接",
+            CONNECTION_ERROR_NETWORK_FAILED
+        );
+    }
+    if err.is_connect() {
+        return format!(
+            "{}|网络连接失败，请检查网络或代理设置",
+            CONNECTION_ERROR_NETWORK_FAILED
+        );
+    }
+    format!(
+        "{}|请求失败: {}",
+        CONNECTION_ERROR_NETWORK_FAILED,
+        err
+    )
+}
+
+pub async fn test_connection(config: &SttConfig) -> Result<(), String> {
+    let provider = normalize_provider(&config.provider);
+    if provider == PROVIDER_SILICONFLOW {
+        test_siliconflow_connection(config).await
+    } else {
+        test_openrouter_connection(config).await
+    }
+}
+
+
+async fn test_openrouter_connection(config: &SttConfig) -> Result<(), String> {
+    let provider = normalize_provider(&config.provider);
+    let api_key = resolve_api_key(config, &provider)?;
+    let model = if config.model.trim().is_empty() {
+        default_model_for_provider(&provider)
+    } else {
+        config.model.trim()
+    };
+
+    let request_body = serde_json::json!({
+        "model": model,
+        "messages": [
+            { "role": "user", "content": "hi" }
+        ],
+        "max_tokens": 1,
+        "temperature": 0
+    });
+
+    let client = reqwest::Client::builder()
+        .timeout(std::time::Duration::from_secs(10))
+        .build()
+        .map_err(|e| format!("创建客户端失败: {:?}", e))?;
+
+    let url = format!(
+        "{}/chat/completions",
+        normalize_base_url(&config.base_url, &provider)
+    );
+    let response = client
+        .post(&url)
+        .header("Authorization", format!("Bearer {}", api_key))
+        .header("Content-Type", "application/json")
+        .header("HTTP-Referer", "https://github.com/aitotype")
+        .header("X-Title", "AItoType")
+        .json(&request_body)
+        .send()
+        .await
+        .map_err(|e| classify_network_error(&e))?;
+
+    if !response.status().is_success() {
+        let status = response.status();
+        let error_text = response.text().await.unwrap_or_default();
+        return Err(classify_http_error(status, &error_text));
+    }
+
+    Ok(())
+}
+
+async fn test_siliconflow_connection(config: &SttConfig) -> Result<(), String> {
+    let provider = PROVIDER_SILICONFLOW.to_string();
+    let api_key = resolve_api_key(config, &provider)?;
+    let model = if config.model.trim().is_empty() {
+        default_model_for_provider(&provider).to_string()
+    } else {
+        config.model.trim().to_string()
+    };
+
+    let client = reqwest::Client::builder()
+        .timeout(std::time::Duration::from_secs(10))
+        .build()
+        .map_err(|e| format!("创建客户端失败: {:?}", e))?;
+
+    let url = format!("{}/models", normalize_base_url(&config.base_url, &provider));
+    let response = client
+        .get(&url)
+        .header("Authorization", format!("Bearer {}", api_key))
+        .send()
+        .await
+        .map_err(|e| classify_network_error(&e))?;
+
+    if !response.status().is_success() {
+        let status = response.status();
+        let error_text = response.text().await.unwrap_or_default();
+        return Err(classify_http_error(status, &error_text));
+    }
+
+    let value: serde_json::Value = response
+        .json()
+        .await
+        .map_err(|e| format!("{}|解析 models 响应失败: {:?}", CONNECTION_ERROR_UNKNOWN, e))?;
+
+    let model_exists = value
+        .get("data")
+        .and_then(|v| v.as_array())
+        .map(|items| {
+            items.iter().any(|item| {
+                item.get("id")
+                    .and_then(|id| id.as_str())
+                    .map(|id| id.eq_ignore_ascii_case(&model))
+                    .unwrap_or(false)
+            })
+        })
+        .unwrap_or(false);
+
+    if !model_exists {
+        return Err(format!(
+            "{}|模型不存在，请检查模型名称是否正确",
+            CONNECTION_ERROR_MODEL_NOT_FOUND
+        ));
+    }
+
+    Ok(())
 }
 
 /// 转录音频文件
