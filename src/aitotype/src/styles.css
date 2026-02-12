@@ -544,6 +544,7 @@ label {
 select {
   width: 100%;
   min-height: 52px;
+  box-sizing: border-box;
   background: rgba(0, 0, 0, 0.32);
   border: 1px solid rgba(255, 255, 255, 0.1);
   border-radius: 12px;
@@ -565,7 +566,8 @@ select:focus {
   position: relative;
 }
 
-#provider-select {
+#provider-select,
+#enhancement-provider-select {
   appearance: none;
   -webkit-appearance: none;
   -moz-appearance: none;
@@ -771,6 +773,32 @@ select:focus {
   color: rgba(255, 255, 255, 0.86);
   white-space: pre-wrap;
   word-break: break-word;
+}
+
+.enhancement-fallback-hint {
+  position: fixed;
+  left: 50%;
+  bottom: 108px;
+  transform: translateX(-50%) translateY(12px);
+  z-index: 60;
+  width: min(760px, calc(100vw - 32px));
+  border-radius: 12px;
+  padding: 10px 14px;
+  font-size: 12px;
+  line-height: 1.5;
+  color: rgba(255, 245, 230, 0.92);
+  background: rgba(255, 159, 10, 0.16);
+  border: 1px solid rgba(255, 159, 10, 0.35);
+  backdrop-filter: blur(14px);
+  box-shadow: 0 8px 22px rgba(0, 0, 0, 0.35);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.2s ease, transform 0.2s ease;
+}
+
+.enhancement-fallback-hint.show {
+  opacity: 1;
+  transform: translateX(-50%) translateY(0);
 }
 
 /* Utilities */

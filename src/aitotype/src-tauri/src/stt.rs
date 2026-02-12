@@ -15,7 +15,7 @@ pub const PROVIDER_SILICONFLOW: &str = "siliconflow";
 pub const DEFAULT_OPENROUTER_MODEL: &str = "google/gemini-3-flash-preview";
 /// SiliconFlow 默认模型（免费 ASR）
 pub const DEFAULT_SILICONFLOW_MODEL: &str = "TeleAI/TeleSpeechASR";
-pub const DEFAULT_ENHANCEMENT_OPENROUTER_MODEL: &str = "google/gemini-2.0-flash-001";
+pub const DEFAULT_ENHANCEMENT_OPENROUTER_MODEL: &str = DEFAULT_OPENROUTER_MODEL;
 pub const DEFAULT_ENHANCEMENT_SILICONFLOW_MODEL: &str = "Qwen/Qwen2.5-7B-Instruct";
 
 /// OpenRouter 默认 API URL

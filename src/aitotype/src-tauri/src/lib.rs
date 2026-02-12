@@ -13,8 +13,10 @@ use serde::Serialize;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Mutex;
 use stt::SttConfig;
-use tauri::State;
+use tauri::{Emitter, State};
 use tauri_plugin_global_shortcut::GlobalShortcutExt;
+
+const LEGACY_ENHANCEMENT_OPENROUTER_MODEL: &str = "google/gemini-2.0-flash-001";
 
 fn load_env_files() {
     static INIT: std::sync::Once = std::sync::Once::new();
@@ -59,6 +61,15 @@ fn normalize_stt_config(config: SttConfig) -> SttConfig {
         .to_string();
     normalized.enhancement_api_key = normalized.enhancement_api_key.trim().to_string();
     if normalized.enhancement_model.trim().is_empty() {
+        normalized.enhancement_model =
+            stt::default_enhancement_model_for_provider(&normalized.enhancement_provider)
+                .to_string();
+    } else if normalized.enhancement_provider == stt::PROVIDER_OPENROUTER
+        && normalized
+            .enhancement_model
+            .trim()
+            .eq_ignore_ascii_case(LEGACY_ENHANCEMENT_OPENROUTER_MODEL)
+    {
         normalized.enhancement_model =
             stt::default_enhancement_model_for_provider(&normalized.enhancement_provider)
                 .to_string();
@@ -137,6 +148,11 @@ struct ConnectionTestResultPayload {
     latency_ms: u64,
 }
 
+#[derive(Clone, Serialize)]
+struct EnhancementFallbackEventPayload {
+    reason: String,
+}
+
 fn parse_typed_error(input: &str) -> (String, String) {
     if let Some((error_type, message)) = input.split_once('|') {
         return (error_type.to_string(), message.to_string());
@@ -211,7 +227,7 @@ async fn transcribe_audio(file_path: String, state: State<'_, AppState>) -> Resu
 
 /// 完整流程: 停止录音 -> 转录 -> 返回结果
 #[tauri::command]
-async fn stop_and_transcribe(state: State<'_, AppState>) -> Result<String, String> {
+async fn stop_and_transcribe(app: tauri::AppHandle, state: State<'_, AppState>) -> Result<String, String> {
     // 停止录音
     let file_path = audio::stop_recording()?;
 
@@ -235,6 +251,12 @@ async fn stop_and_transcribe(state: State<'_, AppState>) -> Result<String, Strin
         Ok(enhanced_text) => Ok(enhanced_text),
         Err(err) => {
             eprintln!("LLM enhancement 失败，回退原始文本: {}", err);
+            let _ = app.emit(
+                "enhancement-fallback-event",
+                EnhancementFallbackEventPayload {
+                    reason: err,
+                },
+            );
             Ok(raw_text)
         }
     }
@@ -627,7 +649,6 @@ pub fn run() {
             // --- Global Shortcut ---
             #[cfg(desktop)]
             {
-                use tauri::Emitter;
                 use tauri_plugin_global_shortcut::ShortcutState;
 
                 let plugin_result = app.handle().plugin(

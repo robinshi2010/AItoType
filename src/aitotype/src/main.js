@@ -11,7 +11,7 @@ const PROVIDER_OPENROUTER = 'openrouter';
 const PROVIDER_SILICONFLOW = 'siliconflow';
 const DEFAULT_OPENROUTER_MODEL = 'google/gemini-3-flash-preview';
 const DEFAULT_SILICONFLOW_MODEL = 'TeleAI/TeleSpeechASR';
-const DEFAULT_ENHANCEMENT_OPENROUTER_MODEL = 'google/gemini-2.0-flash-001';
+const DEFAULT_ENHANCEMENT_OPENROUTER_MODEL = DEFAULT_OPENROUTER_MODEL;
 const DEFAULT_ENHANCEMENT_SILICONFLOW_MODEL = 'Qwen/Qwen2.5-7B-Instruct';
 const DEFAULT_ENHANCEMENT_PROMPT = '你是程序员语音转文字的润色助手。请按规则处理文本：\n1) 去除口头禅、重复词和无意义停顿词；\n2) 修正技术术语、产品名、代码相关拼写错误；\n3) 保留原意，不扩写、不总结、不补充新信息；\n4) 仅做必要标点与断句优化；\n5) 只输出润色后的最终文本，不要任何解释。\n\n原文：\n{text}';
 const API_KEY_STORAGE_KEYS = {
@@ -41,6 +41,7 @@ const state = {
   sttConfig: null,
   currentProvider: PROVIDER_OPENROUTER,
   enhancementProvider: PROVIDER_OPENROUTER,
+  enhancementFallbackHintTimer: null,
   recordMode: 'toggle',
   providerApiKeys: {
     [PROVIDER_OPENROUTER]: '',
@@ -70,6 +71,7 @@ const el = {
   // Result Sheet
   resultSheet: document.getElementById('result-sheet'),
   resultText: document.getElementById('result-text'),
+  enhancementFallbackHint: document.getElementById('enhancement-fallback-hint'),
   closeResultBtn: document.getElementById('reset-result-btn'),
   copyBtn: document.getElementById('copy-btn'),
   autoCopySwitch: document.getElementById('auto-copy-switch'),
@@ -460,6 +462,33 @@ function hideResult() {
   el.resultSheet.classList.add('hidden');
 }
 
+function showEnhancementFallbackHint(reason) {
+  if (!el.enhancementFallbackHint) return;
+
+  const detail = typeof reason === 'string' ? reason.trim() : '';
+  const maxDetailLength = 120;
+  const safeDetail = detail.length > maxDetailLength
+    ? `${detail.slice(0, maxDetailLength)}...`
+    : detail;
+  const text = safeDetail
+    ? `LLM 润色失败，已回退原始转写：${safeDetail}`
+    : 'LLM 润色失败，已回退原始转写';
+
+  el.enhancementFallbackHint.textContent = text;
+  el.enhancementFallbackHint.classList.remove('hidden');
+  el.enhancementFallbackHint.classList.add('show');
+
+  if (state.enhancementFallbackHintTimer) {
+    clearTimeout(state.enhancementFallbackHintTimer);
+  }
+  state.enhancementFallbackHintTimer = setTimeout(() => {
+    if (!el.enhancementFallbackHint) return;
+    el.enhancementFallbackHint.classList.remove('show');
+    el.enhancementFallbackHint.classList.add('hidden');
+    state.enhancementFallbackHintTimer = null;
+  }, 4200);
+}
+
 // ============ History ============
 function addToHistory(text) {
   const time = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
@@ -720,7 +749,7 @@ async function loadConfig() {
   try {
     const config = await invoke('get_stt_config');
     const provider = normalizeProvider(config.provider);
-    const enhancementProvider = normalizeProvider(config.enhancement_provider || provider);
+    const enhancementProvider = normalizeProvider(config.enhancement_provider || PROVIDER_OPENROUTER);
     state.providerApiKeys[PROVIDER_OPENROUTER] = getStoredApiKey(PROVIDER_OPENROUTER);
     state.providerApiKeys[PROVIDER_SILICONFLOW] = getStoredApiKey(PROVIDER_SILICONFLOW);
     state.enhancementProviderApiKeys[PROVIDER_OPENROUTER] = getStoredEnhancementApiKey(PROVIDER_OPENROUTER);
@@ -1005,6 +1034,11 @@ async function init() {
       } else if (action === 'stop') {
         stopAndTranscribeOnly();
       }
+    });
+
+    await listen('enhancement-fallback-event', (event) => {
+      const payload = event?.payload || {};
+      showEnhancementFallbackHint(payload.reason);
     });
   }
 
