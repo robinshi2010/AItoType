@@ -34,6 +34,8 @@
 **/logs/
 **/*.log
 
-# IDE files
+# IDE and Agent files
 **/.idea/
 **/.vscode/*
+.agent/
+.agents/
