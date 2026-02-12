@@ -489,6 +489,49 @@ body {
   margin-bottom: 24px;
 }
 
+.enhancement-section {
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 16px;
+  padding: 14px 14px 2px;
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.enhancement-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.enhancement-title-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+label.enhancement-title {
+  margin: 0;
+  color: rgba(255, 255, 255, 0.9);
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.enhancement-subtitle {
+  color: rgba(255, 255, 255, 0.45);
+  font-size: 12px;
+}
+
+.enhancement-settings {
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  padding-top: 14px;
+}
+
+.enhancement-prompt-input {
+  min-height: 130px;
+  resize: vertical;
+}
+
 label {
   display: block;
   margin-bottom: 10px;

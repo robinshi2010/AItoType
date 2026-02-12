@@ -15,6 +15,8 @@ pub const PROVIDER_SILICONFLOW: &str = "siliconflow";
 pub const DEFAULT_OPENROUTER_MODEL: &str = "google/gemini-3-flash-preview";
 /// SiliconFlow 默认模型（免费 ASR）
 pub const DEFAULT_SILICONFLOW_MODEL: &str = "TeleAI/TeleSpeechASR";
+pub const DEFAULT_ENHANCEMENT_OPENROUTER_MODEL: &str = "google/gemini-2.0-flash-001";
+pub const DEFAULT_ENHANCEMENT_SILICONFLOW_MODEL: &str = "Qwen/Qwen2.5-7B-Instruct";
 
 /// OpenRouter 默认 API URL
 pub const DEFAULT_OPENROUTER_BASE_URL: &str = "https://openrouter.ai/api/v1";
@@ -34,8 +36,17 @@ fn default_record_mode() -> String {
     "toggle".to_string()
 }
 
+fn default_enhancement_provider() -> String {
+    PROVIDER_OPENROUTER.to_string()
+}
 
+fn default_enhancement_model() -> String {
+    DEFAULT_ENHANCEMENT_OPENROUTER_MODEL.to_string()
+}
 
+fn default_enhancement_prompt() -> String {
+    "你是程序员语音转文字的润色助手。请按规则处理文本：\n1) 去除口头禅、重复词和无意义停顿词；\n2) 修正技术术语、产品名、代码相关拼写错误；\n3) 保留原意，不扩写、不总结、不补充新信息；\n4) 仅做必要标点与断句优化；\n5) 只输出润色后的最终文本，不要任何解释。\n\n原文：\n{text}".to_string()
+}
 
 pub fn normalize_provider(provider: &str) -> String {
     let normalized = provider.trim().to_lowercase();
@@ -62,6 +73,13 @@ pub fn default_model_for_provider(provider: &str) -> &'static str {
     }
 }
 
+pub fn default_enhancement_model_for_provider(provider: &str) -> &'static str {
+    if provider == PROVIDER_SILICONFLOW {
+        DEFAULT_ENHANCEMENT_SILICONFLOW_MODEL
+    } else {
+        DEFAULT_ENHANCEMENT_OPENROUTER_MODEL
+    }
+}
 
 pub fn env_key_for_provider(provider: &str) -> &'static str {
     if provider == PROVIDER_SILICONFLOW {
@@ -89,6 +107,24 @@ pub struct SttConfig {
     /// 录音模式: toggle / hold
     #[serde(default = "default_record_mode")]
     pub record_mode: String,
+    /// 是否启用 LLM 润色
+    #[serde(default)]
+    pub enhancement_enabled: bool,
+    /// 润色 Provider: openrouter / siliconflow
+    #[serde(default = "default_enhancement_provider")]
+    pub enhancement_provider: String,
+    /// 润色 API 基础 URL（留空走 provider 默认值）
+    #[serde(default)]
+    pub enhancement_base_url: String,
+    /// 润色 API Key（留空按 fallback 规则）
+    #[serde(default)]
+    pub enhancement_api_key: String,
+    /// 润色模型名称
+    #[serde(default = "default_enhancement_model")]
+    pub enhancement_model: String,
+    /// 润色 Prompt 模板（支持 {text} 占位）
+    #[serde(default = "default_enhancement_prompt")]
+    pub enhancement_prompt: String,
 }
 
 impl Default for SttConfig {
@@ -100,6 +136,12 @@ impl Default for SttConfig {
             model: DEFAULT_OPENROUTER_MODEL.to_string(),
             auto_write: false,
             record_mode: default_record_mode(),
+            enhancement_enabled: false,
+            enhancement_provider: default_enhancement_provider(),
+            enhancement_base_url: String::new(),
+            enhancement_api_key: String::new(),
+            enhancement_model: default_enhancement_model(),
+            enhancement_prompt: default_enhancement_prompt(),
         }
     }
 }
@@ -158,7 +200,34 @@ fn resolve_api_key(config: &SttConfig, provider: &str) -> Result<String, String>
     }
 }
 
+fn resolve_enhancement_api_key(config: &SttConfig, provider: &str) -> Result<String, String> {
+    if !config.enhancement_api_key.trim().is_empty() {
+        return Ok(config.enhancement_api_key.trim().to_string());
+    }
 
+    let stt_provider = normalize_provider(&config.provider);
+    if provider == stt_provider && !config.api_key.trim().is_empty() {
+        return Ok(config.api_key.trim().to_string());
+    }
+
+    let env_key = env_key_for_provider(provider);
+    match std::env::var(env_key) {
+        Ok(value) if !value.trim().is_empty() => Ok(value.trim().to_string()),
+        _ => Err(format!(
+            "Enhancement API Key 不能为空（可通过环境变量 {} 提供）",
+            env_key
+        )),
+    }
+}
+
+fn render_enhancement_prompt(template: &str, raw_text: &str) -> String {
+    let source = if template.trim().is_empty() || !template.contains("{text}") {
+        default_enhancement_prompt()
+    } else {
+        template.trim().to_string()
+    };
+    source.replace("{text}", raw_text)
+}
 
 fn classify_http_error(status: StatusCode, body: &str) -> String {
     let lower = body.to_lowercase();
@@ -238,6 +307,74 @@ pub async fn test_connection(config: &SttConfig) -> Result<(), String> {
     }
 }
 
+pub async fn enhance_text(raw_text: &str, config: &SttConfig) -> Result<String, String> {
+    if !config.enhancement_enabled || raw_text.trim().is_empty() {
+        return Ok(raw_text.to_string());
+    }
+
+    let provider = normalize_provider(&config.enhancement_provider);
+    let model = if config.enhancement_model.trim().is_empty() {
+        default_enhancement_model_for_provider(&provider)
+    } else {
+        config.enhancement_model.trim()
+    };
+    let api_key = resolve_enhancement_api_key(config, &provider)?;
+    let prompt = render_enhancement_prompt(&config.enhancement_prompt, raw_text);
+    let request_body = serde_json::json!({
+        "model": model,
+        "messages": [
+            { "role": "user", "content": prompt }
+        ],
+        "temperature": 0.2,
+        "max_tokens": 2048
+    });
+
+    let client = reqwest::Client::builder()
+        .timeout(std::time::Duration::from_secs(60))
+        .build()
+        .map_err(|e| format!("创建客户端失败: {:?}", e))?;
+
+    let url = format!(
+        "{}/chat/completions",
+        normalize_base_url(&config.enhancement_base_url, &provider)
+    );
+    let response = client
+        .post(&url)
+        .header("Authorization", format!("Bearer {}", api_key))
+        .header("Content-Type", "application/json")
+        .header("HTTP-Referer", "https://github.com/aitotype")
+        .header("X-Title", "AItoType")
+        .json(&request_body)
+        .send()
+        .await
+        .map_err(|e| format!("Enhancement 请求失败: {:?}", e))?;
+
+    if !response.status().is_success() {
+        let status = response.status();
+        let error_text = response.text().await.unwrap_or_default();
+        return Err(format!(
+            "Enhancement API 返回错误 {}: {}",
+            status, error_text
+        ));
+    }
+
+    let result: ChatCompletionResponse = response
+        .json()
+        .await
+        .map_err(|e| format!("Enhancement 解析响应失败: {:?}", e))?;
+
+    if let Some(error) = result.error {
+        return Err(format!("Enhancement API 错误: {}", error.message));
+    }
+
+    result
+        .choices
+        .and_then(|c| c.first().cloned())
+        .and_then(|c| c.message.content)
+        .map(|text| text.trim().to_string())
+        .filter(|text| !text.is_empty())
+        .ok_or_else(|| "Enhancement 未返回有效文本".to_string())
+}
 
 async fn test_openrouter_connection(config: &SttConfig) -> Result<(), String> {
     let provider = normalize_provider(&config.provider);

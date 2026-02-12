@@ -51,6 +51,25 @@ fn normalize_stt_config(config: SttConfig) -> SttConfig {
     }
 
     normalized.api_key = normalized.api_key.trim().to_string();
+    normalized.enhancement_provider = stt::normalize_provider(&normalized.enhancement_provider);
+    normalized.enhancement_base_url = normalized
+        .enhancement_base_url
+        .trim()
+        .trim_end_matches('/')
+        .to_string();
+    normalized.enhancement_api_key = normalized.enhancement_api_key.trim().to_string();
+    if normalized.enhancement_model.trim().is_empty() {
+        normalized.enhancement_model =
+            stt::default_enhancement_model_for_provider(&normalized.enhancement_provider)
+                .to_string();
+    } else {
+        normalized.enhancement_model = normalized.enhancement_model.trim().to_string();
+    }
+    if normalized.enhancement_prompt.trim().is_empty() {
+        normalized.enhancement_prompt = SttConfig::default().enhancement_prompt;
+    } else {
+        normalized.enhancement_prompt = normalized.enhancement_prompt.trim().to_string();
+    }
     normalized
 }
 
@@ -211,7 +230,14 @@ async fn stop_and_transcribe(state: State<'_, AppState>) -> Result<String, Strin
         eprintln!("清理临时录音文件失败 {}: {:?}", file_path, e);
     }
 
-    transcribe_result
+    let raw_text = transcribe_result?;
+    match stt::enhance_text(&raw_text, &config).await {
+        Ok(enhanced_text) => Ok(enhanced_text),
+        Err(err) => {
+            eprintln!("LLM enhancement 失败，回退原始文本: {}", err);
+            Ok(raw_text)
+        }
+    }
 }
 
 /// 模拟键盘输入

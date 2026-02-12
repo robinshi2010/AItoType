@@ -174,6 +174,49 @@
             <input type="text" id="model-input" class="spatial-input" value="google/gemini-3-flash-preview">
           </div>
 
+          <div class="form-section enhancement-section">
+            <div class="enhancement-head">
+              <div class="enhancement-title-wrap">
+                <label class="enhancement-title">LLM Enhancement</label>
+                <span class="enhancement-subtitle">转写后进行文本润色（可选）</span>
+              </div>
+              <label class="toggle-switch">
+                <input type="checkbox" id="enhancement-switch">
+                <span class="slider"></span>
+              </label>
+            </div>
+
+            <div id="enhancement-settings" class="enhancement-settings hidden">
+              <div class="form-section">
+                <label>Enhancement Provider</label>
+                <div class="segmented-control">
+                  <select id="enhancement-provider-select" class="spatial-input">
+                    <option value="openrouter">OpenRouter</option>
+                    <option value="siliconflow">SiliconFlow</option>
+                  </select>
+                </div>
+              </div>
+
+              <div class="form-section">
+                <label id="enhancement-api-key-label">Enhancement API Key (留空则复用 STT Key)</label>
+                <input type="password" id="enhancement-api-key-input" class="spatial-input"
+                  placeholder="留空可复用 STT API Key">
+              </div>
+
+              <div class="form-section">
+                <label>Enhancement Model</label>
+                <input type="text" id="enhancement-model-input" class="spatial-input"
+                  value="google/gemini-2.0-flash-001">
+              </div>
+
+              <div class="form-section">
+                <label>Enhancement Prompt ({text} 占位符)</label>
+                <textarea id="enhancement-prompt-input" class="spatial-input enhancement-prompt-input"
+                  rows="6"></textarea>
+              </div>
+            </div>
+          </div>
+
           <div class="form-section">
             <button type="button" id="test-connection-btn" class="spatial-btn secondary">Test Connection</button>
             <div id="test-connection-result" class="test-result hidden"></div>

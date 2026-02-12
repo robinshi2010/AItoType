@@ -11,9 +11,16 @@ const PROVIDER_OPENROUTER = 'openrouter';
 const PROVIDER_SILICONFLOW = 'siliconflow';
 const DEFAULT_OPENROUTER_MODEL = 'google/gemini-3-flash-preview';
 const DEFAULT_SILICONFLOW_MODEL = 'TeleAI/TeleSpeechASR';
+const DEFAULT_ENHANCEMENT_OPENROUTER_MODEL = 'google/gemini-2.0-flash-001';
+const DEFAULT_ENHANCEMENT_SILICONFLOW_MODEL = 'Qwen/Qwen2.5-7B-Instruct';
+const DEFAULT_ENHANCEMENT_PROMPT = '你是程序员语音转文字的润色助手。请按规则处理文本：\n1) 去除口头禅、重复词和无意义停顿词；\n2) 修正技术术语、产品名、代码相关拼写错误；\n3) 保留原意，不扩写、不总结、不补充新信息；\n4) 仅做必要标点与断句优化；\n5) 只输出润色后的最终文本，不要任何解释。\n\n原文：\n{text}';
 const API_KEY_STORAGE_KEYS = {
   [PROVIDER_OPENROUTER]: 'aitotype_api_key_openrouter',
   [PROVIDER_SILICONFLOW]: 'aitotype_api_key_siliconflow'
+};
+const ENHANCEMENT_API_KEY_STORAGE_KEYS = {
+  [PROVIDER_OPENROUTER]: 'aitotype_api_key_enhancement_openrouter',
+  [PROVIDER_SILICONFLOW]: 'aitotype_api_key_enhancement_siliconflow'
 };
 const DEFAULT_SHORTCUT = /windows/i.test(navigator.userAgent || navigator.platform || '')
   ? 'Ctrl+Shift+Space'
@@ -33,8 +40,13 @@ const state = {
   lastShortcutToggleAt: 0,
   sttConfig: null,
   currentProvider: PROVIDER_OPENROUTER,
+  enhancementProvider: PROVIDER_OPENROUTER,
   recordMode: 'toggle',
   providerApiKeys: {
+    [PROVIDER_OPENROUTER]: '',
+    [PROVIDER_SILICONFLOW]: ''
+  },
+  enhancementProviderApiKeys: {
     [PROVIDER_OPENROUTER]: '',
     [PROVIDER_SILICONFLOW]: ''
   }
@@ -70,6 +82,13 @@ const el = {
   apiKeyLabel: document.getElementById('api-key-label'),
   apiKeyInput: document.getElementById('api-key-input'),
   modelInput: document.getElementById('model-input'),
+  enhancementSwitch: document.getElementById('enhancement-switch'),
+  enhancementSettings: document.getElementById('enhancement-settings'),
+  enhancementProviderSelect: document.getElementById('enhancement-provider-select'),
+  enhancementApiKeyLabel: document.getElementById('enhancement-api-key-label'),
+  enhancementApiKeyInput: document.getElementById('enhancement-api-key-input'),
+  enhancementModelInput: document.getElementById('enhancement-model-input'),
+  enhancementPromptInput: document.getElementById('enhancement-prompt-input'),
   testConnectionBtn: document.getElementById('test-connection-btn'),
   testConnectionResult: document.getElementById('test-connection-result'),
   settingsForm: document.getElementById('settings-form'),
@@ -498,8 +517,18 @@ function defaultModelForProvider(provider) {
   return provider === PROVIDER_SILICONFLOW ? DEFAULT_SILICONFLOW_MODEL : DEFAULT_OPENROUTER_MODEL;
 }
 
+function defaultEnhancementModelForProvider(provider) {
+  return provider === PROVIDER_SILICONFLOW
+    ? DEFAULT_ENHANCEMENT_SILICONFLOW_MODEL
+    : DEFAULT_ENHANCEMENT_OPENROUTER_MODEL;
+}
+
 function keyStorageKey(provider) {
   return API_KEY_STORAGE_KEYS[normalizeProvider(provider)];
+}
+
+function enhancementKeyStorageKey(provider) {
+  return ENHANCEMENT_API_KEY_STORAGE_KEYS[normalizeProvider(provider)];
 }
 
 function getStoredApiKey(provider) {
@@ -518,12 +547,36 @@ function setStoredApiKey(provider, value) {
   localStorage.setItem(storageKey, value);
 }
 
+function getStoredEnhancementApiKey(provider) {
+  const storageKey = enhancementKeyStorageKey(provider);
+  if (!storageKey) return '';
+  return localStorage.getItem(storageKey) || '';
+}
+
+function setStoredEnhancementApiKey(provider, value) {
+  const storageKey = enhancementKeyStorageKey(provider);
+  if (!storageKey) return;
+  if (!value) {
+    localStorage.removeItem(storageKey);
+    return;
+  }
+  localStorage.setItem(storageKey, value);
+}
+
 function cacheCurrentProviderApiKey() {
   const provider = normalizeProvider(state.currentProvider);
   if (!provider || !el.apiKeyInput) return;
   const value = el.apiKeyInput.value || '';
   state.providerApiKeys[provider] = value;
   setStoredApiKey(provider, value);
+}
+
+function cacheCurrentEnhancementApiKey() {
+  const provider = normalizeProvider(state.enhancementProvider);
+  if (!provider || !el.enhancementApiKeyInput) return;
+  const value = el.enhancementApiKeyInput.value || '';
+  state.enhancementProviderApiKeys[provider] = value;
+  setStoredEnhancementApiKey(provider, value);
 }
 
 function syncProviderUi(provider) {
@@ -536,6 +589,23 @@ function syncProviderUi(provider) {
   if (el.apiKeyInput) {
     el.apiKeyInput.placeholder = provider === PROVIDER_SILICONFLOW ? 'sk-...' : 'sk-or-...';
   }
+}
+
+function syncEnhancementProviderUi(provider) {
+  if (el.enhancementApiKeyLabel) {
+    el.enhancementApiKeyLabel.textContent = provider === PROVIDER_SILICONFLOW
+      ? 'Enhancement SiliconFlow API Key (留空则复用 STT Key)'
+      : 'Enhancement OpenRouter API Key (留空则复用 STT Key)';
+  }
+
+  if (el.enhancementApiKeyInput) {
+    el.enhancementApiKeyInput.placeholder = provider === PROVIDER_SILICONFLOW ? 'sk-...' : 'sk-or-...';
+  }
+}
+
+function updateEnhancementSettingsVisibility() {
+  if (!el.enhancementSettings || !el.enhancementSwitch) return;
+  el.enhancementSettings.classList.toggle('hidden', !el.enhancementSwitch.checked);
 }
 
 function onProviderChange() {
@@ -556,11 +626,35 @@ function onProviderChange() {
   }
 }
 
+function onEnhancementProviderChange() {
+  cacheCurrentEnhancementApiKey();
+  const provider = normalizeProvider(el.enhancementProviderSelect?.value);
+  const currentModel = el.enhancementModelInput?.value?.trim() || '';
+  const shouldResetModel = !currentModel
+    || currentModel === DEFAULT_ENHANCEMENT_OPENROUTER_MODEL
+    || currentModel === DEFAULT_ENHANCEMENT_SILICONFLOW_MODEL;
+
+  state.enhancementProvider = provider;
+  syncEnhancementProviderUi(provider);
+  if (el.enhancementApiKeyInput) {
+    el.enhancementApiKeyInput.value = state.enhancementProviderApiKeys[provider] || '';
+  }
+  if (shouldResetModel && el.enhancementModelInput) {
+    el.enhancementModelInput.value = defaultEnhancementModelForProvider(provider);
+  }
+}
+
 function buildSttConfigFromUi() {
   cacheCurrentProviderApiKey();
+  cacheCurrentEnhancementApiKey();
   const provider = normalizeProvider(el.providerSelect?.value || state.currentProvider);
+  const enhancementProvider = normalizeProvider(el.enhancementProviderSelect?.value || state.enhancementProvider);
   const apiKey = state.providerApiKeys[provider] || '';
+  const enhancementApiKey = state.enhancementProviderApiKeys[enhancementProvider] || '';
   const model = (el.modelInput?.value || '').trim() || defaultModelForProvider(provider);
+  const enhancementModel =
+    (el.enhancementModelInput?.value || '').trim() || defaultEnhancementModelForProvider(enhancementProvider);
+  const enhancementPrompt = (el.enhancementPromptInput?.value || '').trim() || DEFAULT_ENHANCEMENT_PROMPT;
 
   return {
     provider,
@@ -568,7 +662,13 @@ function buildSttConfigFromUi() {
     model,
     base_url: '',
     auto_write: el.autoWriteSwitch ? el.autoWriteSwitch.checked : false,
-    record_mode: state.recordMode || 'toggle'
+    record_mode: state.recordMode || 'toggle',
+    enhancement_enabled: el.enhancementSwitch ? el.enhancementSwitch.checked : false,
+    enhancement_provider: enhancementProvider,
+    enhancement_base_url: '',
+    enhancement_api_key: enhancementApiKey,
+    enhancement_model: enhancementModel,
+    enhancement_prompt: enhancementPrompt
   };
 }
 
@@ -620,16 +720,24 @@ async function loadConfig() {
   try {
     const config = await invoke('get_stt_config');
     const provider = normalizeProvider(config.provider);
+    const enhancementProvider = normalizeProvider(config.enhancement_provider || provider);
     state.providerApiKeys[PROVIDER_OPENROUTER] = getStoredApiKey(PROVIDER_OPENROUTER);
     state.providerApiKeys[PROVIDER_SILICONFLOW] = getStoredApiKey(PROVIDER_SILICONFLOW);
+    state.enhancementProviderApiKeys[PROVIDER_OPENROUTER] = getStoredEnhancementApiKey(PROVIDER_OPENROUTER);
+    state.enhancementProviderApiKeys[PROVIDER_SILICONFLOW] = getStoredEnhancementApiKey(PROVIDER_SILICONFLOW);
 
     if (config.api_key && !state.providerApiKeys[provider]) {
       state.providerApiKeys[provider] = config.api_key;
       setStoredApiKey(provider, config.api_key);
     }
+    if (config.enhancement_api_key && !state.enhancementProviderApiKeys[enhancementProvider]) {
+      state.enhancementProviderApiKeys[enhancementProvider] = config.enhancement_api_key;
+      setStoredEnhancementApiKey(enhancementProvider, config.enhancement_api_key);
+    }
 
     state.currentProvider = provider;
-    state.sttConfig = { ...config, provider };
+    state.enhancementProvider = enhancementProvider;
+    state.sttConfig = { ...config, provider, enhancement_provider: enhancementProvider };
 
     if (el.providerSelect) el.providerSelect.value = provider;
     syncProviderUi(provider);
@@ -643,6 +751,25 @@ async function loadConfig() {
     if (el.autoWriteSwitch) {
       el.autoWriteSwitch.checked = !!config.auto_write;
       checkAccessibility();
+    }
+
+    if (el.enhancementSwitch) {
+      el.enhancementSwitch.checked = !!config.enhancement_enabled;
+      updateEnhancementSettingsVisibility();
+    }
+    if (el.enhancementProviderSelect) {
+      el.enhancementProviderSelect.value = enhancementProvider;
+    }
+    syncEnhancementProviderUi(enhancementProvider);
+    if (el.enhancementApiKeyInput) {
+      el.enhancementApiKeyInput.value = state.enhancementProviderApiKeys[enhancementProvider] || '';
+    }
+    if (el.enhancementModelInput) {
+      el.enhancementModelInput.value = (config.enhancement_model || '').trim()
+        || defaultEnhancementModelForProvider(enhancementProvider);
+    }
+    if (el.enhancementPromptInput) {
+      el.enhancementPromptInput.value = (config.enhancement_prompt || '').trim() || DEFAULT_ENHANCEMENT_PROMPT;
     }
 
     const recordMode = config.record_mode || localStorage.getItem('aitotype_record_mode') || 'toggle';
@@ -694,6 +821,13 @@ function onApiKeyInput() {
   if (!provider || !el.apiKeyInput) return;
   const value = el.apiKeyInput.value || '';
   state.providerApiKeys[provider] = value;
+}
+
+function onEnhancementApiKeyInput() {
+  const provider = normalizeProvider(el.enhancementProviderSelect?.value || state.enhancementProvider);
+  if (!provider || !el.enhancementApiKeyInput) return;
+  const value = el.enhancementApiKeyInput.value || '';
+  state.enhancementProviderApiKeys[provider] = value;
 }
 
 // ============ Shortcut Logic ============
@@ -905,6 +1039,17 @@ async function init() {
   if (el.settingsForm) el.settingsForm.addEventListener('submit', saveConfig);
   if (el.providerSelect) el.providerSelect.addEventListener('change', onProviderChange);
   if (el.apiKeyInput) el.apiKeyInput.addEventListener('input', onApiKeyInput);
+  if (el.enhancementSwitch) {
+    el.enhancementSwitch.addEventListener('change', () => {
+      updateEnhancementSettingsVisibility();
+    });
+  }
+  if (el.enhancementProviderSelect) {
+    el.enhancementProviderSelect.addEventListener('change', onEnhancementProviderChange);
+  }
+  if (el.enhancementApiKeyInput) {
+    el.enhancementApiKeyInput.addEventListener('input', onEnhancementApiKeyInput);
+  }
   if (el.testConnectionBtn) {
     el.testConnectionBtn.addEventListener('click', testConnection);
   }
