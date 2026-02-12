@@ -100,6 +100,7 @@ fn default_global_shortcut() -> &'static str {
 #[derive(Clone, Serialize)]
 struct ToggleRecordingEventPayload {
     background: bool,
+    action: String,
 }
 
 #[derive(Clone, Serialize)]
@@ -563,16 +564,44 @@ pub fn run() {
                 let plugin_result = app.handle().plugin(
                     tauri_plugin_global_shortcut::Builder::new()
                         .with_handler(|app, _shortcut, event| {
-                            if event.state == ShortcutState::Pressed {
-                                let background = app
-                                    .get_webview_window("main")
-                                    .and_then(|w| w.is_focused().ok())
-                                    .map(|is_focused| !is_focused)
-                                    .unwrap_or(true);
-                                let _ = app.emit(
-                                    "toggle-recording-event",
-                                    ToggleRecordingEventPayload { background },
-                                );
+                            let record_mode = app
+                                .state::<AppState>()
+                                .stt_config
+                                .lock()
+                                .map(|c| c.record_mode.clone())
+                                .unwrap_or_else(|_| "toggle".to_string());
+
+                            let background = app
+                                .get_webview_window("main")
+                                .and_then(|w| w.is_focused().ok())
+                                .map(|is_focused| !is_focused)
+                                .unwrap_or(true);
+
+                            match record_mode.as_str() {
+                                "hold" => {
+                                    let action = match event.state {
+                                        ShortcutState::Pressed => "start",
+                                        ShortcutState::Released => "stop",
+                                    };
+                                    let _ = app.emit(
+                                        "toggle-recording-event",
+                                        ToggleRecordingEventPayload {
+                                            background,
+                                            action: action.to_string(),
+                                        },
+                                    );
+                                }
+                                _ => {
+                                    if event.state == ShortcutState::Pressed {
+                                        let _ = app.emit(
+                                            "toggle-recording-event",
+                                            ToggleRecordingEventPayload {
+                                                background,
+                                                action: "toggle".to_string(),
+                                            },
+                                        );
+                                    }
+                                }
                             }
                         })
                         .build(),

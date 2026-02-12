@@ -67,11 +67,18 @@ jobs:
         working-directory: src/aitotype
         run: npm ci
 
-      - name: Build app bundle
+      - name: Quick compile (no bundle)
+        if: "!startsWith(github.ref, 'refs/tags/v')"
+        working-directory: src/aitotype
+        run: npx tauri build --ci --no-bundle
+
+      - name: Build app bundle (tag release)
+        if: "startsWith(github.ref, 'refs/tags/v')"
         working-directory: src/aitotype
         run: npm run build:ci
 
       - name: Upload bundles artifact
+        if: "startsWith(github.ref, 'refs/tags/v')"
         uses: actions/upload-artifact@v4
         with:
           name: bundles-${{ matrix.os }}

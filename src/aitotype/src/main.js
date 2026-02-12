@@ -33,6 +33,7 @@ const state = {
   lastShortcutToggleAt: 0,
   sttConfig: null,
   currentProvider: PROVIDER_OPENROUTER,
+  recordMode: 'toggle',
   providerApiKeys: {
     [PROVIDER_OPENROUTER]: '',
     [PROVIDER_SILICONFLOW]: ''
@@ -76,6 +77,9 @@ const el = {
   // Shortcut (Placeholder)
   shortcutRecorder: document.getElementById('shortcut-recorder'),
   shortcutLabel: document.getElementById('shortcut-label'),
+
+  // Recording Mode
+  recordModeSwitch: document.getElementById('record-mode-switch'),
 
   // History
   historyContainer: document.getElementById('history-container')
@@ -156,7 +160,7 @@ function updateStatus(newStatus, msg) {
   switch (newStatus) {
     case 'idle':
       el.statusPill.textContent = 'Ready';
-      el.instructionText.textContent = msg || 'Tap orb to capture';
+      el.instructionText.textContent = msg || (state.recordMode === 'hold' ? 'Hold shortcut to speak' : 'Tap orb to capture');
       stopsAudioAnim();
       break;
 
@@ -303,6 +307,89 @@ async function toggleRecording() {
   }
 }
 
+async function startRecordingOnly(background) {
+  if (state.status === 'recording' || state.status === 'transcribing') return;
+
+  hideResult();
+  try {
+    await syncConfigFromUi();
+    state.backgroundSession = Boolean(background);
+    state.pendingShortcutContext = null;
+    state.holdStartedAt = Date.now();
+
+    await invoke('start_recording');
+    updateStatus('recording');
+
+    if (state.backgroundSession) {
+      safeShowOverlayStatus('recording');
+    }
+  } catch (e) {
+    try { await invoke('stop_recording'); } catch (_) { }
+    updateStatus('error', e.toString());
+    if (state.backgroundSession) {
+      safeHideOverlay();
+    }
+    state.backgroundSession = false;
+  }
+}
+
+async function stopAndTranscribeOnly() {
+  if (state.status !== 'recording') return;
+
+  const holdDuration = Date.now() - (state.holdStartedAt || 0);
+  if (holdDuration < 200) {
+    try { await invoke('stop_recording'); } catch (_) { }
+    updateStatus('idle');
+    if (state.backgroundSession) {
+      safeHideOverlay();
+    }
+    state.backgroundSession = false;
+    return;
+  }
+
+  try {
+    updateStatus('transcribing');
+    if (state.backgroundSession) {
+      safeShowOverlayStatus('transcribing');
+    }
+    const result = await invoke('stop_and_transcribe');
+
+    state.lastResult = result;
+    addToHistory(result);
+
+    if (el.autoCopySwitch && el.autoCopySwitch.checked) {
+      await copyResultToClipboard(result);
+    }
+
+    const isAutoWriteEnabled = state.sttConfig?.auto_write || (el.autoWriteSwitch && el.autoWriteSwitch.checked);
+    if (state.backgroundSession || isAutoWriteEnabled) {
+      if (state.backgroundSession) {
+        safeHideOverlay();
+      }
+      try {
+        await invoke('paste_text', { text: result });
+      } catch (e) {
+        console.error('Paste failed', e);
+        updateStatus('error', 'Paste failed. Check Accessibility permissions.');
+      }
+    }
+
+    updateStatus('success', result);
+
+    if (state.backgroundSession) {
+      safeHideOverlay();
+    }
+    state.backgroundSession = false;
+  } catch (e) {
+    console.error(e);
+    updateStatus('error', e.toString());
+    if (state.backgroundSession) {
+      safeHideOverlay();
+    }
+    state.backgroundSession = false;
+  }
+}
+
 // ============ Audio Animation (Simulated) ============
 function startAudioAnim() {
   // Can add volume visualization here later
@@ -445,7 +532,8 @@ function buildSttConfigFromUi() {
     api_key: apiKey,
     model,
     base_url: '',
-    auto_write: el.autoWriteSwitch ? el.autoWriteSwitch.checked : false
+    auto_write: el.autoWriteSwitch ? el.autoWriteSwitch.checked : false,
+    record_mode: state.recordMode || 'toggle'
   };
 }
 
@@ -483,6 +571,14 @@ async function loadConfig() {
       el.autoWriteSwitch.checked = !!config.auto_write;
       checkAccessibility();
     }
+
+    const recordMode = config.record_mode || localStorage.getItem('aitotype_record_mode') || 'toggle';
+    state.recordMode = recordMode;
+    localStorage.setItem('aitotype_record_mode', recordMode);
+    if (el.recordModeSwitch) {
+      el.recordModeSwitch.checked = recordMode === 'hold';
+    }
+    updateInstructionText();
   } catch (e) { }
 }
 
@@ -673,16 +769,35 @@ async function initShortcutRecorder() {
 }
 
 // ============ Init ============
+function updateInstructionText() {
+  if (state.status !== 'idle') return;
+  if (el.instructionText) {
+    el.instructionText.textContent = state.recordMode === 'hold'
+      ? 'Hold shortcut to speak'
+      : 'Tap orb to capture';
+  }
+}
+
 async function init() {
   // Global shortcut event from Rust
   if (listen) {
     state.shortcutUnlisten = await listen('toggle-recording-event', (event) => {
       if (state.shortcutCaptureActive) return;
-      const now = Date.now();
-      if (now - state.lastShortcutToggleAt < 450) return;
-      state.lastShortcutToggleAt = now;
-      state.pendingShortcutContext = event?.payload || null;
-      toggleRecording();
+      const payload = event?.payload || {};
+      const action = payload.action || 'toggle';
+      const background = payload.background ?? false;
+
+      if (action === 'toggle') {
+        const now = Date.now();
+        if (now - state.lastShortcutToggleAt < 450) return;
+        state.lastShortcutToggleAt = now;
+        state.pendingShortcutContext = payload;
+        toggleRecording();
+      } else if (action === 'start') {
+        startRecordingOnly(background);
+      } else if (action === 'stop') {
+        stopAndTranscribeOnly();
+      }
     });
   }
 
@@ -717,6 +832,19 @@ async function init() {
   if (el.settingsForm) el.settingsForm.addEventListener('submit', saveConfig);
   if (el.providerSelect) el.providerSelect.addEventListener('change', onProviderChange);
   if (el.apiKeyInput) el.apiKeyInput.addEventListener('input', onApiKeyInput);
+
+  if (el.recordModeSwitch) {
+    el.recordModeSwitch.addEventListener('change', async () => {
+      state.recordMode = el.recordModeSwitch.checked ? 'hold' : 'toggle';
+      localStorage.setItem('aitotype_record_mode', state.recordMode);
+      updateInstructionText();
+      try {
+        await syncConfigFromUi();
+      } catch (e) {
+        console.error('Sync record mode failed', e);
+      }
+    });
+  }
 
   // Load Config
   loadConfig();

@@ -24,6 +24,10 @@ fn default_provider() -> String {
     PROVIDER_OPENROUTER.to_string()
 }
 
+fn default_record_mode() -> String {
+    "toggle".to_string()
+}
+
 pub fn normalize_provider(provider: &str) -> String {
     let normalized = provider.trim().to_lowercase();
     if normalized == PROVIDER_SILICONFLOW {
@@ -72,6 +76,9 @@ pub struct SttConfig {
     /// 是否自动写入
     #[serde(default)]
     pub auto_write: bool,
+    /// 录音模式: toggle / hold
+    #[serde(default = "default_record_mode")]
+    pub record_mode: String,
 }
 
 impl Default for SttConfig {
@@ -82,6 +89,7 @@ impl Default for SttConfig {
             api_key: String::new(),
             model: DEFAULT_OPENROUTER_MODEL.to_string(),
             auto_write: false,
+            record_mode: default_record_mode(),
         }
     }
 }
