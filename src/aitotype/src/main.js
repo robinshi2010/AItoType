@@ -25,6 +25,9 @@ const ENHANCEMENT_API_KEY_STORAGE_KEYS = {
 const DEFAULT_SHORTCUT = /windows/i.test(navigator.userAgent || navigator.platform || '')
   ? 'Ctrl+Shift+Space'
   : 'Alt+Space';
+const SHORTCUT_CAPTURE_MAX_KEYS = 3;
+const SHORTCUT_CAPTURE_FINISH_DELAY_MS = 320;
+const SHORTCUT_MODIFIER_ORDER = ['Cmd', 'Control', 'Alt', 'Shift'];
 
 // ============ State ============
 const state = {
@@ -100,6 +103,7 @@ const el = {
   // Shortcut (Placeholder)
   shortcutRecorder: document.getElementById('shortcut-recorder'),
   shortcutLabel: document.getElementById('shortcut-label'),
+  shortcutHint: document.getElementById('shortcut-hint'),
 
   // Recording Mode
   recordModeSwitch: document.getElementById('record-mode-switch'),
@@ -860,45 +864,101 @@ function onEnhancementApiKeyInput() {
 }
 
 // ============ Shortcut Logic ============
-function normalizeShortcut(modifiers, rawKey) {
-  const ordered = ['Command', 'Ctrl', 'Alt', 'Shift']
-    .filter((name) => modifiers.includes(name))
-    .map((name) => {
-      if (name === 'Command') return 'Cmd';
-      if (name === 'Ctrl') return 'Control';
-      return name;
-    });
-
-  let key = rawKey;
+function normalizeShortcutKey(rawKey) {
+  if (!rawKey) return null;
+  const key = `${rawKey}`.trim();
   if (!key) return null;
 
+  const lower = key.toLowerCase();
   const specialMap = {
     ' ': 'Space',
+    space: 'Space',
+    spacebar: 'Space',
     escape: 'Esc',
+    esc: 'Esc',
     enter: 'Enter',
+    return: 'Enter',
     tab: 'Tab',
     backspace: 'Backspace',
     delete: 'Delete',
     arrowup: 'Up',
     arrowdown: 'Down',
     arrowleft: 'Left',
-    arrowright: 'Right'
+    arrowright: 'Right',
+    meta: 'Cmd',
+    command: 'Cmd',
+    os: 'Cmd',
+    control: 'Control',
+    ctrl: 'Control',
+    alt: 'Alt',
+    option: 'Alt',
+    shift: 'Shift',
+    '+': 'Plus',
+    '-': 'Minus'
   };
-  key = specialMap[key.toLowerCase()] || key;
 
-  if (key.length === 1) key = key.toUpperCase();
-  return [...ordered, key].join('+');
+  if (specialMap[lower]) return specialMap[lower];
+  if (/^f\d{1,2}$/i.test(key)) return key.toUpperCase();
+  if (key.length === 1) return key.toUpperCase();
+  return `${key[0].toUpperCase()}${key.slice(1)}`;
+}
+
+function normalizeShortcutTokens(tokens) {
+  if (!Array.isArray(tokens) || tokens.length === 0) return null;
+  const normalized = [];
+  const seen = new Set();
+
+  tokens.forEach((token) => {
+    const key = normalizeShortcutKey(token);
+    if (!key || seen.has(key)) return;
+    seen.add(key);
+    normalized.push(key);
+  });
+
+  if (normalized.length === 0) return null;
+
+  const modifierPriority = new Map(SHORTCUT_MODIFIER_ORDER.map((key, idx) => [key, idx]));
+  normalized.sort((left, right) => {
+    const leftIsModifier = modifierPriority.has(left);
+    const rightIsModifier = modifierPriority.has(right);
+    if (leftIsModifier && rightIsModifier) {
+      return modifierPriority.get(left) - modifierPriority.get(right);
+    }
+    if (leftIsModifier) return -1;
+    if (rightIsModifier) return 1;
+    return left.localeCompare(right);
+  });
+
+  return normalized.join('+');
+}
+
+function normalizeShortcutString(shortcut) {
+  if (!shortcut || typeof shortcut !== 'string') return null;
+  const tokens = shortcut.split('+').map((token) => token.trim()).filter(Boolean);
+  return normalizeShortcutTokens(tokens);
+}
+
+function shortcutEquals(left, right) {
+  return normalizeShortcutString(left) === normalizeShortcutString(right);
+}
+
+function showShortcutHint(text, type = '') {
+  if (!el.shortcutHint) return;
+  el.shortcutHint.textContent = text || '';
+  el.shortcutHint.classList.remove('success', 'warning', 'error');
+  if (type) el.shortcutHint.classList.add(type);
 }
 
 async function setShortcut(shortcut) {
-  if (!shortcut || shortcut.trim().length === 0) return;
-  const ready = await ensureShortcutPluginReady();
-  if (!ready) return;
+  const normalized = normalizeShortcutString(shortcut);
+  if (!normalized) throw new Error('shortcut is empty');
 
-  try {
-    await invoke('update_shortcut', { shortcut });
-    localStorage.setItem('aitotype_shortcut', shortcut);
-  } catch (e) { console.error('Shortcut update failed', e); }
+  const ready = await ensureShortcutPluginReady();
+  if (!ready) throw new Error('global shortcut plugin is not ready');
+
+  await invoke('update_shortcut', { shortcut: normalized });
+  localStorage.setItem('aitotype_shortcut', normalized);
+  return normalized;
 }
 
 async function disableGlobalShortcut() {
@@ -914,11 +974,19 @@ async function disableGlobalShortcut() {
 
 function getSavedShortcut() {
   const stored = localStorage.getItem('aitotype_shortcut');
-  if (/windows/i.test(navigator.userAgent || navigator.platform || '') && (!stored || stored === 'Alt+Space')) {
-    localStorage.setItem('aitotype_shortcut', DEFAULT_SHORTCUT);
-    return DEFAULT_SHORTCUT;
+  const platformIsWindows = /windows/i.test(navigator.userAgent || navigator.platform || '');
+
+  if (platformIsWindows && (!stored || stored === 'Alt+Space')) {
+    const normalizedDefault = normalizeShortcutString(DEFAULT_SHORTCUT) || DEFAULT_SHORTCUT;
+    localStorage.setItem('aitotype_shortcut', normalizedDefault);
+    return normalizedDefault;
   }
-  return stored || DEFAULT_SHORTCUT;
+
+  const normalized = normalizeShortcutString(stored || DEFAULT_SHORTCUT)
+    || normalizeShortcutString(DEFAULT_SHORTCUT)
+    || DEFAULT_SHORTCUT;
+  localStorage.setItem('aitotype_shortcut', normalized);
+  return normalized;
 }
 
 async function ensureShortcutPluginReady(maxAttempts = 30, delayMs = 100) {
@@ -948,7 +1016,13 @@ async function initShortcutRecorder() {
 
   const saved = getSavedShortcut();
   if (el.shortcutLabel) el.shortcutLabel.textContent = saved;
-  await setShortcut(saved);
+  showShortcutHint('');
+  try {
+    await setShortcut(saved);
+  } catch (e) {
+    console.error('Init shortcut failed', e);
+    showShortcutHint('初始化快捷键失败，请重新设置。', 'error');
+  }
 
   if (el.shortcutLabel) el.shortcutLabel.style.opacity = 1;
 
@@ -958,40 +1032,98 @@ async function initShortcutRecorder() {
 
     const previousShortcut = getSavedShortcut();
     el.shortcutRecorder.classList.add('recording');
-    if (el.shortcutLabel) el.shortcutLabel.textContent = 'Press keys...';
+    if (el.shortcutLabel) el.shortcutLabel.textContent = 'Press 1-3 keys...';
+    showShortcutHint('支持 1~3 键组合；按 Esc 取消。');
     await disableGlobalShortcut();
 
-    const handler = async (e) => {
-      e.preventDefault(); e.stopPropagation();
+    const capturedKeys = [];
+    const capturedKeySet = new Set();
+    let finalizeTimer = null;
+    let currentShortcut = null;
 
-      if (e.key === 'Escape') {
-        if (el.shortcutLabel) el.shortcutLabel.textContent = previousShortcut;
-        el.shortcutRecorder.classList.remove('recording');
-        state.shortcutCaptureActive = false;
-        setShortcut(previousShortcut);
-        window.removeEventListener('keydown', handler);
+    const cleanup = () => {
+      if (finalizeTimer !== null) {
+        window.clearTimeout(finalizeTimer);
+        finalizeTimer = null;
+      }
+      el.shortcutRecorder.classList.remove('recording');
+      state.shortcutCaptureActive = false;
+      window.removeEventListener('keydown', keydownHandler, true);
+    };
+
+    const restorePreviousShortcut = async () => {
+      if (el.shortcutLabel) el.shortcutLabel.textContent = previousShortcut;
+      try {
+        await setShortcut(previousShortcut);
+      } catch (e) {
+        console.error('Restore previous shortcut failed', e);
+      }
+    };
+
+    const applyCapturedShortcut = async () => {
+      if (!currentShortcut) {
+        await restorePreviousShortcut();
+        cleanup();
         return;
       }
 
-      const modifiers = [];
-      if (e.metaKey) modifiers.push('Command');
-      if (e.ctrlKey) modifiers.push('Ctrl');
-      if (e.altKey) modifiers.push('Alt');
-      if (e.shiftKey) modifiers.push('Shift');
+      cleanup();
 
-      let key = e.key;
+      if (shortcutEquals(currentShortcut, previousShortcut)) {
+        await restorePreviousShortcut();
+        showShortcutHint(`快捷键已是 ${previousShortcut}，无需重复设置。`, 'warning');
+        return;
+      }
 
-      if (['Control', 'Alt', 'Shift', 'Meta', 'Command'].includes(key)) return;
-
-      const s = normalizeShortcut(modifiers, key);
-      if (!s) return;
-      if (el.shortcutLabel) el.shortcutLabel.textContent = s;
-      el.shortcutRecorder.classList.remove('recording');
-      state.shortcutCaptureActive = false;
-      await setShortcut(s);
-      window.removeEventListener('keydown', handler);
+      try {
+        const applied = await setShortcut(currentShortcut);
+        if (el.shortcutLabel) el.shortcutLabel.textContent = applied;
+        showShortcutHint(`快捷键已更新为 ${applied}。`, 'success');
+      } catch (e) {
+        console.error('Apply shortcut failed', e);
+        await restorePreviousShortcut();
+        showShortcutHint(`快捷键设置失败，已恢复为 ${previousShortcut}。`, 'error');
+      }
     };
-    window.addEventListener('keydown', handler);
+
+    const scheduleFinalize = () => {
+      if (finalizeTimer !== null) window.clearTimeout(finalizeTimer);
+      finalizeTimer = window.setTimeout(() => {
+        applyCapturedShortcut();
+      }, SHORTCUT_CAPTURE_FINISH_DELAY_MS);
+    };
+
+    const keydownHandler = async (e) => {
+      e.preventDefault(); e.stopPropagation();
+
+      if (e.key === 'Escape') {
+        cleanup();
+        await restorePreviousShortcut();
+        showShortcutHint('已取消快捷键设置。');
+        return;
+      }
+
+      if (e.repeat) return;
+
+      const key = normalizeShortcutKey(e.key);
+      if (!key) return;
+
+      if (!capturedKeySet.has(key) && capturedKeys.length >= SHORTCUT_CAPTURE_MAX_KEYS) {
+        showShortcutHint(`最多支持 ${SHORTCUT_CAPTURE_MAX_KEYS} 键组合。`, 'warning');
+        return;
+      }
+
+      if (!capturedKeySet.has(key)) {
+        capturedKeySet.add(key);
+        capturedKeys.push(key);
+      }
+
+      currentShortcut = normalizeShortcutTokens(capturedKeys);
+      if (!currentShortcut) return;
+      if (el.shortcutLabel) el.shortcutLabel.textContent = currentShortcut;
+      scheduleFinalize();
+    };
+    window.addEventListener('keydown', keydownHandler, true);
   };
 
   el.shortcutRecorder.addEventListener('click', startCapture);

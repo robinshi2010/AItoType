@@ -622,6 +622,26 @@ select:focus {
   box-shadow: 0 0 0 3px rgba(10, 132, 255, 0.25);
 }
 
+.shortcut-hint {
+  min-height: 18px;
+  margin: 8px 4px 0;
+  font-size: 12px;
+  line-height: 1.4;
+  color: rgba(255, 255, 255, 0.55);
+}
+
+.shortcut-hint.success {
+  color: #30D158;
+}
+
+.shortcut-hint.warning {
+  color: #FFD60A;
+}
+
+.shortcut-hint.error {
+  color: #FF453A;
+}
+
 .spatial-btn {
   background: #0A84FF;
   color: white;
