@@ -26,8 +26,8 @@ const DEFAULT_SHORTCUT = /windows/i.test(navigator.userAgent || navigator.platfo
   ? 'Ctrl+Shift+Space'
   : 'Alt+Space';
 const SHORTCUT_CAPTURE_MAX_KEYS = 3;
-const SHORTCUT_CAPTURE_FINISH_DELAY_MS = 320;
 const SHORTCUT_MODIFIER_ORDER = ['Cmd', 'Control', 'Alt', 'Shift'];
+const SHORTCUT_MODIFIER_SET = new Set(SHORTCUT_MODIFIER_ORDER);
 
 // ============ State ============
 const state = {
@@ -942,6 +942,35 @@ function shortcutEquals(left, right) {
   return normalizeShortcutString(left) === normalizeShortcutString(right);
 }
 
+function isModifierKey(key) {
+  return SHORTCUT_MODIFIER_SET.has(normalizeShortcutKey(key));
+}
+
+function extractShortcutErrorMessage(error) {
+  if (!error) return '';
+  if (typeof error === 'string') return error;
+  if (error instanceof Error) return error.message || `${error}`;
+  if (typeof error === 'object' && typeof error.message === 'string') return error.message;
+  return `${error}`;
+}
+
+function isShortcutConflictError(error) {
+  const message = extractShortcutErrorMessage(error).toLowerCase();
+  return message.includes('already registered')
+    || message.includes('already in use')
+    || message.includes('in use')
+    || message.includes('conflict')
+    || message.includes('occupied');
+}
+
+function isShortcutUnsupportedError(error) {
+  const message = extractShortcutErrorMessage(error).toLowerCase();
+  return message.includes('invalid')
+    || message.includes('unsupported')
+    || message.includes('parse')
+    || message.includes('accelerator');
+}
+
 function showShortcutHint(text, type = '') {
   if (!el.shortcutHint) return;
   el.shortcutHint.textContent = text || '';
@@ -1031,6 +1060,7 @@ async function initShortcutRecorder() {
     state.shortcutCaptureActive = true;
 
     const previousShortcut = getSavedShortcut();
+    const previousNormalized = normalizeShortcutString(previousShortcut) || previousShortcut;
     el.shortcutRecorder.classList.add('recording');
     if (el.shortcutLabel) el.shortcutLabel.textContent = 'Press 1-3 keys...';
     showShortcutHint('支持 1~3 键组合；按 Esc 取消。');
@@ -1038,23 +1068,20 @@ async function initShortcutRecorder() {
 
     const capturedKeys = [];
     const capturedKeySet = new Set();
-    let finalizeTimer = null;
+    const pressedKeys = new Set();
     let currentShortcut = null;
 
     const cleanup = () => {
-      if (finalizeTimer !== null) {
-        window.clearTimeout(finalizeTimer);
-        finalizeTimer = null;
-      }
       el.shortcutRecorder.classList.remove('recording');
       state.shortcutCaptureActive = false;
       window.removeEventListener('keydown', keydownHandler, true);
+      window.removeEventListener('keyup', keyupHandler, true);
     };
 
     const restorePreviousShortcut = async () => {
-      if (el.shortcutLabel) el.shortcutLabel.textContent = previousShortcut;
+      if (el.shortcutLabel) el.shortcutLabel.textContent = previousNormalized;
       try {
-        await setShortcut(previousShortcut);
+        await setShortcut(previousNormalized);
       } catch (e) {
         console.error('Restore previous shortcut failed', e);
       }
@@ -1069,9 +1096,15 @@ async function initShortcutRecorder() {
 
       cleanup();
 
-      if (shortcutEquals(currentShortcut, previousShortcut)) {
+      if (shortcutEquals(currentShortcut, previousNormalized)) {
         await restorePreviousShortcut();
-        showShortcutHint(`快捷键已是 ${previousShortcut}，无需重复设置。`, 'warning');
+        showShortcutHint(`快捷键已是 ${previousNormalized}，无需重复设置。`, 'warning');
+        return;
+      }
+
+      if (currentShortcut.split('+').every((token) => isModifierKey(token))) {
+        await restorePreviousShortcut();
+        showShortcutHint('快捷键至少要包含一个非修饰键（例如 A、S、Space）。', 'warning');
         return;
       }
 
@@ -1082,15 +1115,16 @@ async function initShortcutRecorder() {
       } catch (e) {
         console.error('Apply shortcut failed', e);
         await restorePreviousShortcut();
-        showShortcutHint(`快捷键设置失败，已恢复为 ${previousShortcut}。`, 'error');
+        if (isShortcutConflictError(e)) {
+          showShortcutHint(`快捷键 ${currentShortcut} 可能与其他软件冲突，已恢复为 ${previousNormalized}。`, 'warning');
+          return;
+        }
+        if (isShortcutUnsupportedError(e)) {
+          showShortcutHint(`快捷键 ${currentShortcut} 当前系统不支持，已恢复为 ${previousNormalized}。`, 'warning');
+          return;
+        }
+        showShortcutHint(`快捷键设置失败，已恢复为 ${previousNormalized}。`, 'error');
       }
-    };
-
-    const scheduleFinalize = () => {
-      if (finalizeTimer !== null) window.clearTimeout(finalizeTimer);
-      finalizeTimer = window.setTimeout(() => {
-        applyCapturedShortcut();
-      }, SHORTCUT_CAPTURE_FINISH_DELAY_MS);
     };
 
     const keydownHandler = async (e) => {
@@ -1107,6 +1141,7 @@ async function initShortcutRecorder() {
 
       const key = normalizeShortcutKey(e.key);
       if (!key) return;
+      pressedKeys.add(key);
 
       if (!capturedKeySet.has(key) && capturedKeys.length >= SHORTCUT_CAPTURE_MAX_KEYS) {
         showShortcutHint(`最多支持 ${SHORTCUT_CAPTURE_MAX_KEYS} 键组合。`, 'warning');
@@ -1121,9 +1156,21 @@ async function initShortcutRecorder() {
       currentShortcut = normalizeShortcutTokens(capturedKeys);
       if (!currentShortcut) return;
       if (el.shortcutLabel) el.shortcutLabel.textContent = currentShortcut;
-      scheduleFinalize();
     };
+
+    const keyupHandler = (e) => {
+      e.preventDefault(); e.stopPropagation();
+
+      const key = normalizeShortcutKey(e.key);
+      if (key) pressedKeys.delete(key);
+
+      if (pressedKeys.size === 0 && currentShortcut) {
+        applyCapturedShortcut();
+      }
+    };
+
     window.addEventListener('keydown', keydownHandler, true);
+    window.addEventListener('keyup', keyupHandler, true);
   };
 
   el.shortcutRecorder.addEventListener('click', startCapture);
