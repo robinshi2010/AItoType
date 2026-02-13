@@ -17,6 +17,7 @@ use tauri::{Emitter, State};
 use tauri_plugin_global_shortcut::GlobalShortcutExt;
 
 const LEGACY_ENHANCEMENT_OPENROUTER_MODEL: &str = "google/gemini-2.0-flash-001";
+const LEGACY_ENHANCEMENT_PROGRAMMER_PROMPT: &str = "你是程序员语音转文字的润色助手。请按规则处理文本：\n1) 去除口头禅、重复词和无意义停顿词；\n2) 修正技术术语、产品名、代码相关拼写错误；\n3) 保留原意，不扩写、不总结、不补充新信息；\n4) 仅做必要标点与断句优化；\n5) 只输出润色后的最终文本，不要任何解释。\n\n原文：\n{text}";
 
 fn load_env_files() {
     static INIT: std::sync::Once = std::sync::Once::new();
@@ -79,7 +80,12 @@ fn normalize_stt_config(config: SttConfig) -> SttConfig {
     if normalized.enhancement_prompt.trim().is_empty() {
         normalized.enhancement_prompt = SttConfig::default().enhancement_prompt;
     } else {
-        normalized.enhancement_prompt = normalized.enhancement_prompt.trim().to_string();
+        let trimmed_prompt = normalized.enhancement_prompt.trim();
+        if trimmed_prompt == LEGACY_ENHANCEMENT_PROGRAMMER_PROMPT {
+            normalized.enhancement_prompt = SttConfig::default().enhancement_prompt;
+        } else {
+            normalized.enhancement_prompt = trimmed_prompt.to_string();
+        }
     }
     normalized
 }
@@ -227,7 +233,10 @@ async fn transcribe_audio(file_path: String, state: State<'_, AppState>) -> Resu
 
 /// 完整流程: 停止录音 -> 转录 -> 返回结果
 #[tauri::command]
-async fn stop_and_transcribe(app: tauri::AppHandle, state: State<'_, AppState>) -> Result<String, String> {
+async fn stop_and_transcribe(
+    app: tauri::AppHandle,
+    state: State<'_, AppState>,
+) -> Result<String, String> {
     // 停止录音
     let file_path = audio::stop_recording()?;
 
@@ -247,14 +256,32 @@ async fn stop_and_transcribe(app: tauri::AppHandle, state: State<'_, AppState>) 
     }
 
     let raw_text = transcribe_result?;
-    match stt::enhance_text(&raw_text, &config).await {
-        Ok(enhanced_text) => Ok(enhanced_text),
-        Err(err) => {
+    let enhance_result = tokio::time::timeout(
+        std::time::Duration::from_secs(stt::ENHANCEMENT_REQUEST_TIMEOUT_SECS),
+        stt::enhance_text(&raw_text, &config),
+    )
+    .await;
+
+    match enhance_result {
+        Ok(Ok(enhanced_text)) => Ok(enhanced_text),
+        Ok(Err(err)) => {
             eprintln!("LLM enhancement 失败，回退原始文本: {}", err);
             let _ = app.emit(
                 "enhancement-fallback-event",
+                EnhancementFallbackEventPayload { reason: err },
+            );
+            Ok(raw_text)
+        }
+        Err(_) => {
+            let reason = format!(
+                "LLM 润色超时（{} 秒）",
+                stt::ENHANCEMENT_REQUEST_TIMEOUT_SECS
+            );
+            eprintln!("LLM enhancement 超时，回退原始文本: {}", reason);
+            let _ = app.emit(
+                "enhancement-fallback-event",
                 EnhancementFallbackEventPayload {
-                    reason: err,
+                    reason: reason.clone(),
                 },
             );
             Ok(raw_text)

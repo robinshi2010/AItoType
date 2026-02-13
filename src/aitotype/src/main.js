@@ -13,7 +13,7 @@ const DEFAULT_OPENROUTER_MODEL = 'google/gemini-3-flash-preview';
 const DEFAULT_SILICONFLOW_MODEL = 'TeleAI/TeleSpeechASR';
 const DEFAULT_ENHANCEMENT_OPENROUTER_MODEL = DEFAULT_OPENROUTER_MODEL;
 const DEFAULT_ENHANCEMENT_SILICONFLOW_MODEL = 'Qwen/Qwen2.5-7B-Instruct';
-const DEFAULT_ENHANCEMENT_PROMPT = '你是程序员语音转文字的润色助手。请按规则处理文本：\n1) 去除口头禅、重复词和无意义停顿词；\n2) 修正技术术语、产品名、代码相关拼写错误；\n3) 保留原意，不扩写、不总结、不补充新信息；\n4) 仅做必要标点与断句优化；\n5) 只输出润色后的最终文本，不要任何解释。\n\n原文：\n{text}';
+const DEFAULT_ENHANCEMENT_PROMPT = '你是语音转文字的润色助手。请按规则处理文本：\n1) 去除口头禅、重复词和无意义停顿词；\n2) 修正明显错别字、术语和专有名词错误；\n3) 保留原意，不扩写、不总结、不补充新信息；\n4) 仅做必要标点与断句优化；\n5) 只输出润色后的最终文本，不要任何解释。\n\n原文：\n{text}';
 const API_KEY_STORAGE_KEYS = {
   [PROVIDER_OPENROUTER]: 'aitotype_api_key_openrouter',
   [PROVIDER_SILICONFLOW]: 'aitotype_api_key_siliconflow'

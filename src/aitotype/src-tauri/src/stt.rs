@@ -17,6 +17,7 @@ pub const DEFAULT_OPENROUTER_MODEL: &str = "google/gemini-3-flash-preview";
 pub const DEFAULT_SILICONFLOW_MODEL: &str = "TeleAI/TeleSpeechASR";
 pub const DEFAULT_ENHANCEMENT_OPENROUTER_MODEL: &str = DEFAULT_OPENROUTER_MODEL;
 pub const DEFAULT_ENHANCEMENT_SILICONFLOW_MODEL: &str = "Qwen/Qwen2.5-7B-Instruct";
+pub const ENHANCEMENT_REQUEST_TIMEOUT_SECS: u64 = 12;
 
 /// OpenRouter 默认 API URL
 pub const DEFAULT_OPENROUTER_BASE_URL: &str = "https://openrouter.ai/api/v1";
@@ -45,7 +46,7 @@ fn default_enhancement_model() -> String {
 }
 
 fn default_enhancement_prompt() -> String {
-    "你是程序员语音转文字的润色助手。请按规则处理文本：\n1) 去除口头禅、重复词和无意义停顿词；\n2) 修正技术术语、产品名、代码相关拼写错误；\n3) 保留原意，不扩写、不总结、不补充新信息；\n4) 仅做必要标点与断句优化；\n5) 只输出润色后的最终文本，不要任何解释。\n\n原文：\n{text}".to_string()
+    "你是语音转文字的润色助手。请按规则处理文本：\n1) 去除口头禅、重复词和无意义停顿词；\n2) 修正明显错别字、术语和专有名词错误；\n3) 保留原意，不扩写、不总结、不补充新信息；\n4) 仅做必要标点与断句优化；\n5) 只输出润色后的最终文本，不要任何解释。\n\n原文：\n{text}".to_string()
 }
 
 pub fn normalize_provider(provider: &str) -> String {
@@ -160,7 +161,7 @@ struct ChatChoice {
 
 #[derive(Debug, Clone, Deserialize)]
 struct ChatMessage {
-    content: Option<String>,
+    content: Option<serde_json::Value>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -281,7 +282,7 @@ fn classify_http_error(status: StatusCode, body: &str) -> String {
 fn classify_network_error(err: &reqwest::Error) -> String {
     if err.is_timeout() {
         return format!(
-            "{}|网络超时（10 秒），请检查网络连接",
+            "{}|网络超时，请检查网络连接",
             CONNECTION_ERROR_NETWORK_FAILED
         );
     }
@@ -291,11 +292,45 @@ fn classify_network_error(err: &reqwest::Error) -> String {
             CONNECTION_ERROR_NETWORK_FAILED
         );
     }
-    format!(
-        "{}|请求失败: {}",
-        CONNECTION_ERROR_NETWORK_FAILED,
-        err
-    )
+    format!("{}|请求失败: {}", CONNECTION_ERROR_NETWORK_FAILED, err)
+}
+
+fn strip_typed_error_message(input: String) -> String {
+    if let Some((_, message)) = input.split_once('|') {
+        return message.to_string();
+    }
+    input
+}
+
+fn extract_text_from_chat_message(message: &ChatMessage) -> Option<String> {
+    let content = message.content.as_ref()?;
+    match content {
+        serde_json::Value::String(text) => {
+            let text = text.trim();
+            if text.is_empty() {
+                None
+            } else {
+                Some(text.to_string())
+            }
+        }
+        serde_json::Value::Array(parts) => {
+            let mut chunks = Vec::new();
+            for part in parts {
+                if let Some(text) = part.get("text").and_then(|value| value.as_str()) {
+                    let trimmed = text.trim();
+                    if !trimmed.is_empty() {
+                        chunks.push(trimmed);
+                    }
+                }
+            }
+            if chunks.is_empty() {
+                None
+            } else {
+                Some(chunks.join("\n"))
+            }
+        }
+        _ => None,
+    }
 }
 
 pub async fn test_connection(config: &SttConfig) -> Result<(), String> {
@@ -326,11 +361,13 @@ pub async fn enhance_text(raw_text: &str, config: &SttConfig) -> Result<String, 
             { "role": "user", "content": prompt }
         ],
         "temperature": 0.2,
-        "max_tokens": 2048
+        "max_tokens": 1024
     });
 
     let client = reqwest::Client::builder()
-        .timeout(std::time::Duration::from_secs(60))
+        .timeout(std::time::Duration::from_secs(
+            ENHANCEMENT_REQUEST_TIMEOUT_SECS,
+        ))
         .build()
         .map_err(|e| format!("创建客户端失败: {:?}", e))?;
 
@@ -347,15 +384,15 @@ pub async fn enhance_text(raw_text: &str, config: &SttConfig) -> Result<String, 
         .json(&request_body)
         .send()
         .await
-        .map_err(|e| format!("Enhancement 请求失败: {:?}", e))?;
+        .map_err(|e| strip_typed_error_message(classify_network_error(&e)))?;
 
     if !response.status().is_success() {
         let status = response.status();
         let error_text = response.text().await.unwrap_or_default();
-        return Err(format!(
-            "Enhancement API 返回错误 {}: {}",
-            status, error_text
-        ));
+        return Err(strip_typed_error_message(classify_http_error(
+            status,
+            &error_text,
+        )));
     }
 
     let result: ChatCompletionResponse = response
@@ -370,9 +407,7 @@ pub async fn enhance_text(raw_text: &str, config: &SttConfig) -> Result<String, 
     result
         .choices
         .and_then(|c| c.first().cloned())
-        .and_then(|c| c.message.content)
-        .map(|text| text.trim().to_string())
-        .filter(|text| !text.is_empty())
+        .and_then(|c| extract_text_from_chat_message(&c.message))
         .ok_or_else(|| "Enhancement 未返回有效文本".to_string())
 }
 
@@ -570,7 +605,7 @@ async fn transcribe_with_openrouter(file_path: &str, config: &SttConfig) -> Resu
     result
         .choices
         .and_then(|c| c.first().cloned())
-        .and_then(|c| c.message.content)
+        .and_then(|c| extract_text_from_chat_message(&c.message))
         .ok_or_else(|| "未获取到转录结果".to_string())
 }
 
