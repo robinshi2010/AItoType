@@ -738,6 +738,44 @@ select:focus {
   border: 1px solid rgba(255, 69, 58, 0.3);
 }
 
+.log-path-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.log-path {
+  flex: 1;
+  min-height: 38px;
+  box-sizing: border-box;
+  padding: 9px 12px;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  color: rgba(255, 255, 255, 0.76);
+  font-size: 12px;
+  line-height: 1.4;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  user-select: text;
+}
+
+.hint-text {
+  display: block;
+  margin-top: 8px;
+  margin-left: 4px;
+  font-size: 11px;
+  line-height: 1.45;
+  color: rgba(255, 255, 255, 0.45);
+}
+
+.hint-text code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.68);
+}
+
 .form-footer {
   display: flex;
   flex-direction: column;

@@ -7,6 +7,7 @@
 
 mod audio;
 mod keyboard;
+mod logging;
 mod stt;
 
 use serde::Serialize;
@@ -224,6 +225,16 @@ fn get_input_device_name() -> String {
     audio::get_input_device_name()
 }
 
+#[tauri::command]
+fn get_log_dir_path(app: tauri::AppHandle) -> Result<String, String> {
+    logging::get_log_dir_path(&app)
+}
+
+#[tauri::command]
+fn open_log_dir(app: tauri::AppHandle) -> Result<(), String> {
+    logging::open_log_dir(&app)
+}
+
 /// 转录音频文件
 #[tauri::command]
 async fn transcribe_audio(file_path: String, state: State<'_, AppState>) -> Result<String, String> {
@@ -262,27 +273,72 @@ async fn stop_and_transcribe(
     }
 
     let raw_text = transcribe_result?;
+    let mut log_entry = logging::TranscribeLogEntry {
+        timestamp: chrono::Local::now().to_rfc3339(),
+        stt_provider: config.provider.clone(),
+        stt_model: config.model.clone(),
+        stt_text: raw_text.clone(),
+        enhancement_enabled: config.enhancement_enabled,
+        enhancement_provider: None,
+        enhancement_model: None,
+        enhancement_text: None,
+        enhancement_status: None,
+        enhancement_error: None,
+        enhancement_duration_ms: None,
+        final_text: raw_text.clone(),
+    };
+
+    if !config.enhancement_enabled {
+        logging::append_log(&app, log_entry);
+        return Ok(raw_text);
+    }
+
+    log_entry.enhancement_provider = Some(config.enhancement_provider.clone());
+    log_entry.enhancement_model = Some(config.enhancement_model.clone());
+
+    let enhancement_started = std::time::Instant::now();
     let enhance_result = tokio::time::timeout(
         std::time::Duration::from_secs(stt::ENHANCEMENT_REQUEST_TIMEOUT_SECS),
         stt::enhance_text(&raw_text, &config),
     )
     .await;
 
-    match enhance_result {
-        Ok(Ok(enhanced_text)) => Ok(enhanced_text),
+    let result = match enhance_result {
+        Ok(Ok(enhanced_text)) => {
+            log_entry.enhancement_text = Some(enhanced_text.clone());
+            log_entry.enhancement_status = Some("success".to_string());
+            log_entry.enhancement_duration_ms =
+                Some(enhancement_started.elapsed().as_millis() as u64);
+            log_entry.final_text = enhanced_text.clone();
+            Ok(enhanced_text)
+        }
         Ok(Err(err)) => {
+            log_entry.enhancement_status = Some("failed".to_string());
+            log_entry.enhancement_error = Some(err.clone());
+            log_entry.enhancement_duration_ms =
+                Some(enhancement_started.elapsed().as_millis() as u64);
+            log_entry.final_text = raw_text.clone();
+
             eprintln!("LLM enhancement 失败，回退原始文本: {}", err);
             let _ = app.emit(
                 "enhancement-fallback-event",
-                EnhancementFallbackEventPayload { reason: err },
+                EnhancementFallbackEventPayload {
+                    reason: err.clone(),
+                },
             );
-            Ok(raw_text)
+            Ok(raw_text.clone())
         }
         Err(_) => {
             let reason = format!(
                 "LLM 润色超时（{} 秒）",
                 stt::ENHANCEMENT_REQUEST_TIMEOUT_SECS
             );
+            log_entry.enhancement_status = Some("timeout".to_string());
+            log_entry.enhancement_error = Some(reason.clone());
+            log_entry.enhancement_duration_ms =
+                Some(enhancement_started.elapsed().as_millis() as u64);
+            log_entry.final_text = raw_text.clone();
+
             eprintln!("LLM enhancement 超时，回退原始文本: {}", reason);
             let _ = app.emit(
                 "enhancement-fallback-event",
@@ -290,9 +346,12 @@ async fn stop_and_transcribe(
                     reason: reason.clone(),
                 },
             );
-            Ok(raw_text)
+            Ok(raw_text.clone())
         }
-    }
+    };
+
+    logging::append_log(&app, log_entry);
+    result
 }
 
 /// 模拟键盘输入
@@ -755,6 +814,8 @@ pub fn run() {
             is_recording,
             get_audio_level,
             get_input_device_name,
+            get_log_dir_path,
+            open_log_dir,
             transcribe_audio,
             stop_and_transcribe,
             type_text,

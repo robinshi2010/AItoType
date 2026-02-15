@@ -45,6 +45,7 @@ base64 = "0.22"
 
 # 异步 trait
 async-trait = "0.1"
+chrono = "0.4"
 
 # 全局状态
 lazy_static = "1.4"

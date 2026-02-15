@@ -104,6 +104,8 @@ const el = {
   enhancementPromptInput: document.getElementById('enhancement-prompt-input'),
   testConnectionBtn: document.getElementById('test-connection-btn'),
   testConnectionResult: document.getElementById('test-connection-result'),
+  logDirPath: document.getElementById('log-dir-path'),
+  openLogDirBtn: document.getElementById('open-log-dir-btn'),
   settingsForm: document.getElementById('settings-form'),
   settingsStatus: document.getElementById('settings-status'),
   settingsSaveBtn: document.querySelector('#settings-form button[type="submit"]'),
@@ -827,6 +829,23 @@ async function syncConfigFromUi() {
   await invoke('save_stt_config', { config });
 }
 
+async function loadLogDirPath() {
+  if (!el.logDirPath) return;
+  try {
+    const path = await invoke('get_log_dir_path');
+    const text = typeof path === 'string' ? path.trim() : '';
+    el.logDirPath.textContent = text || '-';
+    if (text) {
+      el.logDirPath.title = text;
+    } else {
+      el.logDirPath.removeAttribute('title');
+    }
+  } catch (_) {
+    el.logDirPath.textContent = '-';
+    el.logDirPath.removeAttribute('title');
+  }
+}
+
 async function loadConfig() {
   try {
     const config = await invoke('get_stt_config');
@@ -891,6 +910,8 @@ async function loadConfig() {
     }
     updateInstructionText();
   } catch (e) { }
+
+  await loadLogDirPath();
 }
 
 async function saveConfig(e) {
@@ -1343,6 +1364,16 @@ async function init() {
   }
   if (el.testConnectionBtn) {
     el.testConnectionBtn.addEventListener('click', testConnection);
+  }
+
+  if (el.openLogDirBtn) {
+    el.openLogDirBtn.addEventListener('click', async () => {
+      try {
+        await invoke('open_log_dir');
+      } catch (e) {
+        console.error('Open log directory failed', e);
+      }
+    });
   }
 
   if (el.recordModeSwitch) {
