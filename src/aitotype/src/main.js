@@ -56,6 +56,11 @@ const state = {
   }
 };
 
+const WAVEFORM_BARS = 28;
+const waveformHistory = Array.from({ length: WAVEFORM_BARS }, () => 0);
+let waveformIdx = 0;
+const DEFAULT_DEVICE_LABEL = 'System Default Input';
+
 // ============ Elements ============
 const el = {
   // Spotlight
@@ -70,6 +75,9 @@ const el = {
   orbWrapper: document.querySelector('.orb-wrapper'),
   statusPill: document.getElementById('status-pill'),
   instructionText: document.getElementById('instruction-text'),
+  waveformBar: document.getElementById('waveform-bar'),
+  waveformCanvas: document.getElementById('waveform-canvas'),
+  deviceName: document.getElementById('device-name'),
 
   // Result Sheet
   resultSheet: document.getElementById('result-sheet'),
@@ -418,8 +426,69 @@ async function stopAndTranscribeOnly() {
 }
 
 // ============ Audio Animation (Real Level) ============
+function resetWaveform() {
+  waveformHistory.fill(0);
+  waveformIdx = 0;
+  if (!el.waveformCanvas) return;
+  const ctx = el.waveformCanvas.getContext('2d');
+  if (!ctx) return;
+  ctx.clearRect(0, 0, el.waveformCanvas.width, el.waveformCanvas.height);
+}
+
+function drawWaveform(level) {
+  if (!el.waveformCanvas) return;
+
+  const ctx = el.waveformCanvas.getContext('2d');
+  if (!ctx) return;
+
+  waveformHistory[waveformIdx] = level;
+  waveformIdx = (waveformIdx + 1) % WAVEFORM_BARS;
+
+  const width = el.waveformCanvas.width;
+  const height = el.waveformCanvas.height;
+  const gap = 2;
+  const totalGap = gap * (WAVEFORM_BARS - 1);
+  const barWidth = Math.max(2, Math.floor((width - totalGap) / WAVEFORM_BARS));
+
+  ctx.clearRect(0, 0, width, height);
+
+  for (let i = 0; i < WAVEFORM_BARS; i++) {
+    const idx = (waveformIdx + i) % WAVEFORM_BARS;
+    const value = waveformHistory[idx];
+    const barHeight = Math.max(2, Math.round(2 + value * (height - 4)));
+    const x = i * (barWidth + gap);
+    const y = Math.round((height - barHeight) / 2);
+    const alpha = 0.26 + value * 0.64;
+
+    ctx.fillStyle = `rgba(10, 132, 255, ${alpha.toFixed(3)})`;
+    if (typeof ctx.roundRect === 'function') {
+      ctx.beginPath();
+      ctx.roundRect(x, y, barWidth, barHeight, 2);
+      ctx.fill();
+    } else {
+      ctx.fillRect(x, y, barWidth, barHeight);
+    }
+  }
+}
+
+async function queryDeviceName() {
+  if (!el.deviceName) return;
+  try {
+    const deviceName = String(await invoke('get_input_device_name') || '').trim();
+    el.deviceName.textContent = `🎙 ${deviceName || DEFAULT_DEVICE_LABEL}`;
+  } catch (_) {
+    el.deviceName.textContent = `🎙 ${DEFAULT_DEVICE_LABEL}`;
+  }
+}
+
 function startAudioAnim() {
   if (!el.recordTrigger || state.audioLevelTimer) return;
+
+  if (el.waveformBar) {
+    el.waveformBar.classList.remove('hidden');
+  }
+  resetWaveform();
+  queryDeviceName();
 
   state.audioLevelTimer = setInterval(async () => {
     if (state.status !== 'recording') {
@@ -441,6 +510,7 @@ function startAudioAnim() {
         0 18px 40px rgba(0, 0, 0, 0.4),
         0 0 ${glowSize.toFixed(1)}px rgba(10, 132, 255, ${glowAlpha.toFixed(3)})
       `;
+      drawWaveform(safeLevel);
     } catch (_) { }
   }, 80);
 }
@@ -454,6 +524,14 @@ function stopsAudioAnim() {
     el.recordTrigger.style.transform = '';
     el.recordTrigger.style.boxShadow = '';
   }
+
+  if (el.waveformBar) {
+    el.waveformBar.classList.add('hidden');
+  }
+  if (el.deviceName) {
+    el.deviceName.textContent = '';
+  }
+  resetWaveform();
 }
 
 // ============ Result Sheet ============

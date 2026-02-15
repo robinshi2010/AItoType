@@ -143,6 +143,8 @@ body {
   display: flex;
   flex-direction: column;
   gap: 3px;
+  min-width: 0;
+  flex: 1;
 }
 
 .status-text {
@@ -157,6 +159,31 @@ body {
   font-size: 11px;
   letter-spacing: 0.08em;
   color: var(--text-2);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.overlay-waveform {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  margin-left: 8px;
+  min-width: 30px;
+}
+
+.overlay-waveform .bar {
+  width: 3px;
+  height: 4px;
+  border-radius: 999px;
+  background: linear-gradient(180deg, rgba(119, 201, 255, 0.95), rgba(17, 163, 255, 0.8));
+  box-shadow: 0 0 10px rgba(17, 163, 255, 0.35);
+  transition: height 0.08s linear, opacity 0.12s ease;
+}
+
+.overlay-pill.transcribing .overlay-waveform {
+  opacity: 0.45;
 }
 
 .overlay-pill.recording .status-orb {

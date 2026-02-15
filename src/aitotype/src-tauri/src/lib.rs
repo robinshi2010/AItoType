@@ -218,6 +218,12 @@ fn get_audio_level() -> f32 {
     audio::get_audio_level()
 }
 
+/// 获取当前输入设备名称
+#[tauri::command]
+fn get_input_device_name() -> String {
+    audio::get_input_device_name()
+}
+
 /// 转录音频文件
 #[tauri::command]
 async fn transcribe_audio(file_path: String, state: State<'_, AppState>) -> Result<String, String> {
@@ -652,16 +658,14 @@ pub fn run() {
                 .icon_as_template(false)
                 .menu(&menu)
                 .show_menu_on_left_click(true)
-                .on_menu_event(|app, event| {
-                    match event.id.as_ref() {
-                        "quit" => app.exit(0),
-                        "show" => {
-                            if let Err(e) = show_or_create_main_window(app) {
-                                eprintln!("show main window failed: {}", e);
-                            }
+                .on_menu_event(|app, event| match event.id.as_ref() {
+                    "quit" => app.exit(0),
+                    "show" => {
+                        if let Err(e) = show_or_create_main_window(app) {
+                            eprintln!("show main window failed: {}", e);
                         }
-                        _ => {}
                     }
+                    _ => {}
                 })
                 .build(app)?;
 
@@ -750,6 +754,7 @@ pub fn run() {
             stop_recording,
             is_recording,
             get_audio_level,
+            get_input_device_name,
             transcribe_audio,
             stop_and_transcribe,
             type_text,
