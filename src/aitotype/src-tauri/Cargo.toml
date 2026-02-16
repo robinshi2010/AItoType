@@ -50,6 +50,7 @@ chrono = "0.4"
 # 全局状态
 lazy_static = "1.4"
 tauri-plugin-global-shortcut = "2.3.1"
+aho-corasick = "1.1"
 
 [target.'cfg(target_os = "macos")'.dependencies]
 tauri = { version = "2", features = ["tray-icon", "macos-private-api"] }

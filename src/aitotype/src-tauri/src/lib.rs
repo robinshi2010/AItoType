@@ -6,6 +6,7 @@
 //! - 键盘输入 (keyboard 模块)
 
 mod audio;
+mod corrections;
 mod keyboard;
 mod logging;
 mod stt;
@@ -365,6 +366,55 @@ fn open_external_link(url: String) -> Result<(), String> {
     open_external_url(&url)
 }
 
+#[tauri::command]
+fn get_corrections(app: tauri::AppHandle) -> corrections::CorrectionStore {
+    corrections::load_corrections(&app)
+}
+
+#[tauri::command]
+fn add_correction(
+    app: tauri::AppHandle,
+    wrong: String,
+    correct: String,
+) -> Result<corrections::CorrectionStore, String> {
+    let mut store = corrections::load_corrections(&app);
+    corrections::add_correction(&mut store, &wrong, &correct)?;
+    corrections::save_corrections(&app, &store)?;
+    Ok(store)
+}
+
+#[tauri::command]
+fn remove_correction(
+    app: tauri::AppHandle,
+    correct: String,
+) -> Result<corrections::CorrectionStore, String> {
+    let mut store = corrections::load_corrections(&app);
+    let _ = corrections::remove_correction(&mut store, &correct);
+    corrections::save_corrections(&app, &store)?;
+    Ok(store)
+}
+
+#[tauri::command]
+fn remove_correction_variant(
+    app: tauri::AppHandle,
+    correct: String,
+    variant: String,
+) -> Result<corrections::CorrectionStore, String> {
+    let mut store = corrections::load_corrections(&app);
+    let _ = corrections::remove_correction_variant(&mut store, &correct, &variant);
+    corrections::save_corrections(&app, &store)?;
+    Ok(store)
+}
+
+#[tauri::command]
+fn apply_corrections_preview(
+    app: tauri::AppHandle,
+    text: String,
+) -> Result<corrections::ApplyCorrectionsResult, String> {
+    let store = corrections::load_corrections(&app);
+    Ok(corrections::apply_corrections(&text, &store))
+}
+
 /// 转录音频文件
 #[tauri::command]
 async fn transcribe_audio(file_path: String, state: State<'_, AppState>) -> Result<String, String> {
@@ -403,11 +453,27 @@ async fn stop_and_transcribe(
     }
 
     let raw_text = transcribe_result?;
+    let mut correction_store = corrections::load_corrections(&app);
+
+    // 第一次替换：STT 后、Enhancement 前
+    let first_pass = corrections::apply_corrections(&raw_text, &correction_store);
+    let corrected_text = first_pass.text.clone();
+    let mut correction_hits = first_pass.hits.clone();
+    let mut correction_store_dirty =
+        corrections::increment_hit_counts(&mut correction_store, &first_pass.hits);
+
     let mut log_entry = logging::TranscribeLogEntry {
         timestamp: chrono::Local::now().to_rfc3339(),
         stt_provider: config.provider.clone(),
         stt_model: config.model.clone(),
         stt_text: raw_text.clone(),
+        pre_correction_text: Some(raw_text.clone()),
+        post_correction_text: Some(corrected_text.clone()),
+        correction_hits: if correction_hits.is_empty() {
+            None
+        } else {
+            Some(correction_hits.clone())
+        },
         enhancement_enabled: config.enhancement_enabled,
         enhancement_provider: None,
         enhancement_model: None,
@@ -415,12 +481,15 @@ async fn stop_and_transcribe(
         enhancement_status: None,
         enhancement_error: None,
         enhancement_duration_ms: None,
-        final_text: raw_text.clone(),
+        final_text: corrected_text.clone(),
     };
 
     if !config.enhancement_enabled {
+        if correction_store_dirty {
+            let _ = corrections::save_corrections(&app, &correction_store);
+        }
         logging::append_log(&app, log_entry);
-        return Ok(raw_text);
+        return Ok(corrected_text);
     }
 
     log_entry.enhancement_provider = Some(config.enhancement_provider.clone());
@@ -429,25 +498,24 @@ async fn stop_and_transcribe(
     let enhancement_started = std::time::Instant::now();
     let enhance_result = tokio::time::timeout(
         std::time::Duration::from_secs(stt::ENHANCEMENT_REQUEST_TIMEOUT_SECS),
-        stt::enhance_text(&raw_text, &config),
+        stt::enhance_text(&corrected_text, &config),
     )
     .await;
 
-    let result = match enhance_result {
+    let after_enhance = match enhance_result {
         Ok(Ok(enhanced_text)) => {
             log_entry.enhancement_text = Some(enhanced_text.clone());
             log_entry.enhancement_status = Some("success".to_string());
             log_entry.enhancement_duration_ms =
                 Some(enhancement_started.elapsed().as_millis() as u64);
-            log_entry.final_text = enhanced_text.clone();
-            Ok(enhanced_text)
+            enhanced_text
         }
         Ok(Err(err)) => {
             log_entry.enhancement_status = Some("failed".to_string());
             log_entry.enhancement_error = Some(err.clone());
             log_entry.enhancement_duration_ms =
                 Some(enhancement_started.elapsed().as_millis() as u64);
-            log_entry.final_text = raw_text.clone();
+            log_entry.enhancement_text = None;
 
             eprintln!("LLM enhancement 失败，回退原始文本: {}", err);
             let _ = app.emit(
@@ -456,7 +524,7 @@ async fn stop_and_transcribe(
                     reason: err.clone(),
                 },
             );
-            Ok(raw_text.clone())
+            corrected_text.clone()
         }
         Err(_) => {
             let reason = format!(
@@ -467,7 +535,7 @@ async fn stop_and_transcribe(
             log_entry.enhancement_error = Some(reason.clone());
             log_entry.enhancement_duration_ms =
                 Some(enhancement_started.elapsed().as_millis() as u64);
-            log_entry.final_text = raw_text.clone();
+            log_entry.enhancement_text = None;
 
             eprintln!("LLM enhancement 超时，回退原始文本: {}", reason);
             let _ = app.emit(
@@ -476,12 +544,31 @@ async fn stop_and_transcribe(
                     reason: reason.clone(),
                 },
             );
-            Ok(raw_text.clone())
+            corrected_text.clone()
         }
     };
 
+    // 第二次替换：Enhancement 后兜底
+    let second_pass = corrections::apply_corrections(&after_enhance, &correction_store);
+    if !second_pass.hits.is_empty() {
+        correction_hits.extend(second_pass.hits.clone());
+    }
+    correction_store_dirty |= corrections::increment_hit_counts(&mut correction_store, &second_pass.hits);
+
+    log_entry.post_correction_text = Some(second_pass.text.clone());
+    log_entry.correction_hits = if correction_hits.is_empty() {
+        None
+    } else {
+        Some(correction_hits)
+    };
+    log_entry.final_text = second_pass.text.clone();
+
+    if correction_store_dirty {
+        let _ = corrections::save_corrections(&app, &correction_store);
+    }
+
     logging::append_log(&app, log_entry);
-    result
+    Ok(second_pass.text)
 }
 
 /// 模拟键盘输入
@@ -953,6 +1040,11 @@ pub fn run() {
             open_log_dir,
             check_update_now,
             open_external_link,
+            get_corrections,
+            add_correction,
+            remove_correction,
+            remove_correction_variant,
+            apply_corrections_preview,
             transcribe_audio,
             stop_and_transcribe,
             type_text,

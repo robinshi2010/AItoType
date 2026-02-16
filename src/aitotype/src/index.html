@@ -33,6 +33,7 @@
   <!-- Mouse Spotlight Effect -->
   <div id="spotlight" class="spotlight-cursor"></div>
   <div id="enhancement-fallback-hint" class="enhancement-fallback-hint hidden" role="status" aria-live="polite"></div>
+  <div id="correction-toast" class="correction-toast hidden" role="status" aria-live="polite"></div>
 
   <!-- Main Spatial Container -->
   <main class="spatial-stage">
@@ -99,6 +100,13 @@
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                 <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
                 <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+              </svg>
+            </button>
+            <button id="correct-btn" class="spatial-btn icon-only" title="Correct selected text"
+              aria-label="Correct selected text">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M12 20h9"></path>
+                <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4 12.5-12.5z"></path>
               </svg>
             </button>
             <button id="reset-result-btn" class="spatial-btn icon-only danger" title="Dismiss transcript"
@@ -235,6 +243,24 @@
             </div>
           </div>
 
+          <div class="form-section correction-section">
+            <div class="correction-head">
+              <div class="correction-title-wrap">
+                <label class="correction-title">易错词记忆</label>
+                <span class="correction-subtitle">一次纠正，后续自动替换</span>
+              </div>
+              <span class="correction-count" id="correction-count">0 条</span>
+            </div>
+            <div id="correction-list" class="correction-list">
+              <div class="empty-state">暂无易错词记录</div>
+            </div>
+            <div class="correction-add-row">
+              <input type="text" id="correction-add-wrong" class="spatial-input" placeholder="错误词">
+              <input type="text" id="correction-add-correct" class="spatial-input" placeholder="正确词">
+              <button type="button" id="correction-add-btn" class="spatial-btn secondary">添加</button>
+            </div>
+          </div>
+
           <div class="form-section">
             <button type="button" id="test-connection-btn" class="spatial-btn secondary">Test Connection</button>
             <div id="test-connection-result" class="test-result hidden"></div>
@@ -274,6 +300,36 @@
     </section>
 
   </main>
+
+  <div id="correction-modal" class="correction-modal hidden" role="dialog" aria-modal="true"
+    aria-labelledby="correction-modal-title">
+    <div class="correction-modal-content">
+      <div class="correction-modal-header">
+        <h2 id="correction-modal-title">纠正易错词</h2>
+        <button type="button" id="correction-modal-close" class="spatial-btn icon-only"
+          aria-label="Close correction modal">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <line x1="18" y1="6" x2="6" y2="18"></line>
+            <line x1="6" y1="6" x2="18" y2="18"></line>
+          </svg>
+        </button>
+      </div>
+      <div class="correction-modal-body">
+        <div class="form-section">
+          <label for="correction-wrong-input">错误词</label>
+          <input type="text" id="correction-wrong-input" class="spatial-input" readonly>
+        </div>
+        <div class="form-section">
+          <label for="correction-correct-input">正确词</label>
+          <input type="text" id="correction-correct-input" class="spatial-input" placeholder="输入正确词">
+        </div>
+      </div>
+      <div class="correction-modal-footer">
+        <button type="button" id="correction-cancel-btn" class="spatial-btn secondary">取消</button>
+        <button type="button" id="correction-confirm-btn" class="spatial-btn primary">确认并替换</button>
+      </div>
+    </div>
+  </div>
 
   <!-- Bottom Ornament (Navigation) -->
   <nav class="spatial-ornament">

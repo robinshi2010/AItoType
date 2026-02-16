@@ -557,6 +557,10 @@ body {
   font-size: 16px;
   line-height: 1.6;
   color: rgba(255, 255, 255, 0.9);
+  user-select: text;
+  cursor: text;
+  white-space: pre-wrap;
+  word-break: break-word;
 }
 
 .icon-btn-plain {
@@ -976,6 +980,44 @@ select:focus {
   transform: translateX(-50%) translateY(0);
 }
 
+.correction-toast {
+  position: fixed;
+  left: 50%;
+  bottom: 148px;
+  transform: translateX(-50%) translateY(12px);
+  z-index: 65;
+  width: min(560px, calc(100vw - 32px));
+  border-radius: 12px;
+  padding: 10px 14px;
+  font-size: 12px;
+  line-height: 1.5;
+  color: rgba(228, 240, 255, 0.92);
+  background: rgba(12, 18, 28, 0.86);
+  border: 1px solid rgba(95, 164, 255, 0.34);
+  backdrop-filter: blur(14px);
+  box-shadow: 0 8px 22px rgba(0, 0, 0, 0.35);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.2s ease, transform 0.2s ease;
+}
+
+.correction-toast.show {
+  opacity: 1;
+  transform: translateX(-50%) translateY(0);
+}
+
+.correction-toast.success {
+  color: #b7ffd1;
+  border-color: rgba(48, 209, 88, 0.45);
+  background: rgba(11, 32, 20, 0.88);
+}
+
+.correction-toast.error {
+  color: #ffd7d4;
+  border-color: rgba(255, 69, 58, 0.45);
+  background: rgba(42, 16, 15, 0.9);
+}
+
 /* Utilities */
 ::-webkit-scrollbar {
   width: 6px;
@@ -1184,6 +1226,16 @@ input:checked+.slider:before {
   border-color: rgba(255, 69, 58, 0.35);
 }
 
+.sheet-actions #correct-btn {
+  background: rgba(10, 132, 255, 0.13) !important;
+  color: rgba(158, 213, 255, 0.95) !important;
+}
+
+.sheet-actions #correct-btn:hover {
+  background: rgba(10, 132, 255, 0.24) !important;
+  border-color: rgba(10, 132, 255, 0.38);
+}
+
 .sheet-actions .spatial-btn.copied {
   background: rgba(48, 209, 88, 0.24) !important;
   color: #30D158 !important;
@@ -1257,6 +1309,230 @@ input:checked+.slider:before {
   font-size: 13px;
   font-weight: 600;
   color: rgba(255, 255, 255, 0.8);
+}
+
+.correction-section {
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 16px;
+  padding: 14px 14px 12px;
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.correction-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.correction-title-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+label.correction-title {
+  margin: 0;
+  color: rgba(255, 255, 255, 0.9);
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.correction-subtitle {
+  color: rgba(255, 255, 255, 0.45);
+  font-size: 12px;
+}
+
+.correction-count {
+  font-size: 12px;
+  color: rgba(169, 207, 255, 0.82);
+  padding: 3px 8px;
+  border-radius: 999px;
+  border: 1px solid rgba(95, 164, 255, 0.34);
+  background: rgba(10, 132, 255, 0.15);
+}
+
+.correction-list {
+  max-height: 240px;
+  overflow-y: auto;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(0, 0, 0, 0.2);
+  padding: 8px;
+}
+
+.correction-list .empty-state {
+  min-height: 120px;
+}
+
+.correction-row {
+  border-radius: 10px;
+  padding: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.correction-row+.correction-row {
+  margin-top: 8px;
+}
+
+.correction-row-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 8px;
+}
+
+.correction-row-correct {
+  font-size: 14px;
+  color: rgba(238, 248, 255, 0.95);
+  font-weight: 600;
+}
+
+.correction-row-meta {
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.45);
+}
+
+.correction-row-delete {
+  border: 1px solid rgba(255, 69, 58, 0.28);
+  background: rgba(255, 69, 58, 0.08);
+  color: rgba(255, 121, 111, 0.92);
+  border-radius: 8px;
+  width: 28px;
+  height: 28px;
+  cursor: pointer;
+}
+
+.correction-row-delete:hover {
+  background: rgba(255, 69, 58, 0.18);
+}
+
+.correction-variant-wrap {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.correction-variant-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 8px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  color: rgba(224, 239, 255, 0.94);
+  font-size: 12px;
+}
+
+.correction-variant-delete {
+  width: 16px;
+  height: 16px;
+  border-radius: 999px;
+  border: 0;
+  cursor: pointer;
+  color: rgba(255, 255, 255, 0.75);
+  background: rgba(255, 255, 255, 0.14);
+  line-height: 1;
+  padding: 0;
+}
+
+.correction-variant-delete:hover {
+  background: rgba(255, 69, 58, 0.34);
+}
+
+.correction-add-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr auto;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.correction-add-row .spatial-input {
+  min-height: 46px;
+  font-size: 14px;
+}
+
+.correction-add-row .spatial-btn.secondary {
+  width: auto;
+  min-width: 88px;
+  height: 46px;
+  padding: 0 16px;
+}
+
+.correction-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 120;
+  background: rgba(0, 0, 0, 0.45);
+  backdrop-filter: blur(4px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+}
+
+.correction-modal-content {
+  width: min(460px, 100%);
+  border-radius: 18px;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  background: rgba(24, 24, 30, 0.88);
+  backdrop-filter: blur(30px);
+  box-shadow: 0 24px 68px rgba(0, 0, 0, 0.45);
+  padding: 14px 14px 12px;
+}
+
+.correction-modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.correction-modal-header h2 {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.correction-modal-header .spatial-btn {
+  width: 34px;
+  height: 34px;
+  padding: 0;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.correction-modal-header .spatial-btn svg {
+  width: 14px;
+  height: 14px;
+}
+
+.correction-modal-body {
+  margin-top: 10px;
+}
+
+.correction-modal-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.correction-modal-footer .spatial-btn {
+  min-width: 108px;
+  height: 42px;
+  padding: 0 14px;
+}
+
+.correction-modal-footer .spatial-btn.secondary {
+  width: auto;
 }
 
 .info-path {

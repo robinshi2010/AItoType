@@ -45,6 +45,7 @@ const state = {
   currentProvider: PROVIDER_OPENROUTER,
   enhancementProvider: PROVIDER_OPENROUTER,
   enhancementFallbackHintTimer: null,
+  correctionToastTimer: null,
   recordMode: 'toggle',
   updateBannerDismissed: false,
   updateInfo: null,
@@ -91,7 +92,15 @@ const el = {
   // Result Sheet
   resultSheet: document.getElementById('result-sheet'),
   resultText: document.getElementById('result-text'),
+  correctBtn: document.getElementById('correct-btn'),
   enhancementFallbackHint: document.getElementById('enhancement-fallback-hint'),
+  correctionToast: document.getElementById('correction-toast'),
+  correctionModal: document.getElementById('correction-modal'),
+  correctionModalClose: document.getElementById('correction-modal-close'),
+  correctionCancelBtn: document.getElementById('correction-cancel-btn'),
+  correctionConfirmBtn: document.getElementById('correction-confirm-btn'),
+  correctionWrongInput: document.getElementById('correction-wrong-input'),
+  correctionCorrectInput: document.getElementById('correction-correct-input'),
   closeResultBtn: document.getElementById('reset-result-btn'),
   copyBtn: document.getElementById('copy-btn'),
   autoCopySwitch: document.getElementById('auto-copy-switch'),
@@ -113,6 +122,11 @@ const el = {
   enhancementPromptInput: document.getElementById('enhancement-prompt-input'),
   testConnectionBtn: document.getElementById('test-connection-btn'),
   testConnectionResult: document.getElementById('test-connection-result'),
+  correctionCount: document.getElementById('correction-count'),
+  correctionList: document.getElementById('correction-list'),
+  correctionAddWrong: document.getElementById('correction-add-wrong'),
+  correctionAddCorrect: document.getElementById('correction-add-correct'),
+  correctionAddBtn: document.getElementById('correction-add-btn'),
   logDirPath: document.getElementById('log-dir-path'),
   openLogDirBtn: document.getElementById('open-log-dir-btn'),
   settingsForm: document.getElementById('settings-form'),
@@ -553,6 +567,7 @@ function showResult(text) {
 
 function hideResult() {
   el.resultSheet.classList.add('hidden');
+  closeCorrectionModal();
 }
 
 function showEnhancementFallbackHint(reason) {
@@ -580,6 +595,297 @@ function showEnhancementFallbackHint(reason) {
     el.enhancementFallbackHint.classList.add('hidden');
     state.enhancementFallbackHintTimer = null;
   }, 4200);
+}
+
+function showCorrectionToast(message, type = 'error') {
+  if (!el.correctionToast || !message) return;
+
+  if (state.correctionToastTimer) {
+    clearTimeout(state.correctionToastTimer);
+    state.correctionToastTimer = null;
+  }
+
+  el.correctionToast.textContent = message;
+  el.correctionToast.classList.remove('hidden', 'show', 'success', 'error');
+  el.correctionToast.classList.add(type === 'success' ? 'success' : 'error');
+
+  requestAnimationFrame(() => {
+    if (!el.correctionToast) return;
+    el.correctionToast.classList.add('show');
+  });
+
+  state.correctionToastTimer = setTimeout(() => {
+    if (!el.correctionToast) return;
+    el.correctionToast.classList.remove('show');
+    el.correctionToast.classList.add('hidden');
+    state.correctionToastTimer = null;
+  }, 2600);
+}
+
+function getSelectedTextInResult() {
+  const selection = window.getSelection();
+  if (!selection || selection.rangeCount === 0 || selection.isCollapsed || !el.resultText) {
+    return '';
+  }
+
+  const range = selection.getRangeAt(0);
+  const commonNode = range.commonAncestorContainer.nodeType === Node.TEXT_NODE
+    ? range.commonAncestorContainer.parentNode
+    : range.commonAncestorContainer;
+
+  if (!commonNode || !el.resultText.contains(commonNode)) {
+    return '';
+  }
+
+  return selection.toString().trim();
+}
+
+function openCorrectionModal(wrongText) {
+  if (!el.correctionModal || !el.correctionWrongInput || !el.correctionCorrectInput) return;
+
+  el.correctionWrongInput.value = wrongText;
+  el.correctionCorrectInput.value = '';
+  el.correctionModal.classList.remove('hidden');
+
+  requestAnimationFrame(() => {
+    if (!el.correctionCorrectInput) return;
+    el.correctionCorrectInput.focus();
+  });
+}
+
+function closeCorrectionModal() {
+  if (!el.correctionModal) return;
+  el.correctionModal.classList.add('hidden');
+}
+
+async function confirmCorrectionFromModal() {
+  const wrong = (el.correctionWrongInput?.value || '').trim();
+  const correct = (el.correctionCorrectInput?.value || '').trim();
+
+  if (!wrong) {
+    showCorrectionToast('请先选中需要纠正的词语');
+    return;
+  }
+  if (!correct) {
+    showCorrectionToast('请输入正确词');
+    return;
+  }
+
+  try {
+    await invoke('add_correction', { wrong, correct });
+
+    if (state.lastResult) {
+      const preview = await invoke('apply_corrections_preview', { text: state.lastResult });
+      const nextText = String(preview?.text || state.lastResult);
+      state.lastResult = nextText;
+      if (el.resultText) {
+        el.resultText.textContent = nextText;
+      }
+      if (el.autoCopySwitch?.checked) {
+        await copyResultToClipboard(nextText);
+      }
+    }
+
+    await loadCorrections();
+    closeCorrectionModal();
+    showCorrectionToast('已保存纠错并更新当前结果', 'success');
+  } catch (e) {
+    const message = e?.toString?.() || '保存纠错失败';
+    showCorrectionToast(message);
+  }
+}
+
+function formatCorrectionMeta(entry) {
+  const hits = Number(entry?.hit_count || 0);
+  const updatedAtRaw = String(entry?.updated_at || '').trim();
+  const updatedAt = updatedAtRaw ? new Date(updatedAtRaw) : null;
+  const updatedText = updatedAt && !Number.isNaN(updatedAt.valueOf())
+    ? updatedAt.toLocaleString()
+    : '-';
+  return `命中 ${hits} 次 · 更新于 ${updatedText}`;
+}
+
+function renderCorrectionList(corrections) {
+  if (!el.correctionList) return;
+
+  const list = Array.isArray(corrections) ? corrections : [];
+  if (el.correctionCount) {
+    el.correctionCount.textContent = `${list.length} 条`;
+  }
+
+  if (list.length === 0) {
+    el.correctionList.innerHTML = '<div class="empty-state">暂无易错词记录</div>';
+    return;
+  }
+
+  el.correctionList.innerHTML = '';
+
+  list.forEach((entry) => {
+    const row = document.createElement('div');
+    row.className = 'correction-row';
+
+    const rowTop = document.createElement('div');
+    rowTop.className = 'correction-row-top';
+
+    const titleWrap = document.createElement('div');
+
+    const correctLabel = document.createElement('div');
+    correctLabel.className = 'correction-row-correct';
+    correctLabel.textContent = entry.correct || '';
+
+    const meta = document.createElement('div');
+    meta.className = 'correction-row-meta';
+    meta.textContent = formatCorrectionMeta(entry);
+
+    titleWrap.appendChild(correctLabel);
+    titleWrap.appendChild(meta);
+
+    const deleteRowBtn = document.createElement('button');
+    deleteRowBtn.type = 'button';
+    deleteRowBtn.className = 'correction-row-delete';
+    deleteRowBtn.textContent = '✕';
+    deleteRowBtn.title = '删除整条';
+    deleteRowBtn.addEventListener('click', async () => {
+      try {
+        await invoke('remove_correction', { correct: entry.correct || '' });
+        await loadCorrections();
+        showCorrectionToast('已删除纠错条目', 'success');
+      } catch (e) {
+        showCorrectionToast(e?.toString?.() || '删除失败');
+      }
+    });
+
+    rowTop.appendChild(titleWrap);
+    rowTop.appendChild(deleteRowBtn);
+
+    const variantsWrap = document.createElement('div');
+    variantsWrap.className = 'correction-variant-wrap';
+    const variants = Array.isArray(entry.variants) ? entry.variants : [];
+
+    variants.forEach((variant) => {
+      const chip = document.createElement('span');
+      chip.className = 'correction-variant-chip';
+
+      const text = document.createElement('span');
+      text.textContent = variant;
+      chip.appendChild(text);
+
+      const deleteVariantBtn = document.createElement('button');
+      deleteVariantBtn.type = 'button';
+      deleteVariantBtn.className = 'correction-variant-delete';
+      deleteVariantBtn.textContent = '×';
+      deleteVariantBtn.title = `删除变体 ${variant}`;
+      deleteVariantBtn.addEventListener('click', async () => {
+        try {
+          await invoke('remove_correction_variant', {
+            correct: entry.correct || '',
+            variant
+          });
+          await loadCorrections();
+          showCorrectionToast('已删除变体', 'success');
+        } catch (e) {
+          showCorrectionToast(e?.toString?.() || '删除变体失败');
+        }
+      });
+
+      chip.appendChild(deleteVariantBtn);
+      variantsWrap.appendChild(chip);
+    });
+
+    row.appendChild(rowTop);
+    row.appendChild(variantsWrap);
+    el.correctionList.appendChild(row);
+  });
+}
+
+async function loadCorrections() {
+  try {
+    const store = await invoke('get_corrections');
+    renderCorrectionList(store?.corrections || []);
+  } catch (_) {
+    renderCorrectionList([]);
+  }
+}
+
+async function addCorrectionFromSettings() {
+  const wrong = (el.correctionAddWrong?.value || '').trim();
+  const correct = (el.correctionAddCorrect?.value || '').trim();
+
+  if (!wrong || !correct) {
+    showCorrectionToast('请输入错误词和正确词');
+    return;
+  }
+
+  try {
+    await invoke('add_correction', { wrong, correct });
+    if (el.correctionAddWrong) el.correctionAddWrong.value = '';
+    if (el.correctionAddCorrect) el.correctionAddCorrect.value = '';
+    await loadCorrections();
+    showCorrectionToast('纠错词已添加', 'success');
+  } catch (e) {
+    showCorrectionToast(e?.toString?.() || '添加失败');
+  }
+}
+
+function bindCorrectionActions() {
+  if (el.correctBtn) {
+    el.correctBtn.addEventListener('click', () => {
+      const selected = getSelectedTextInResult();
+      if (!selected) {
+        showCorrectionToast('请先在结果中选中要纠正的词语');
+        return;
+      }
+      openCorrectionModal(selected);
+    });
+  }
+
+  if (el.correctionModalClose) {
+    el.correctionModalClose.addEventListener('click', closeCorrectionModal);
+  }
+  if (el.correctionCancelBtn) {
+    el.correctionCancelBtn.addEventListener('click', closeCorrectionModal);
+  }
+  if (el.correctionConfirmBtn) {
+    el.correctionConfirmBtn.addEventListener('click', confirmCorrectionFromModal);
+  }
+  if (el.correctionCorrectInput) {
+    el.correctionCorrectInput.addEventListener('keydown', (event) => {
+      if (event.key === 'Enter') {
+        event.preventDefault();
+        confirmCorrectionFromModal();
+      } else if (event.key === 'Escape') {
+        event.preventDefault();
+        closeCorrectionModal();
+      }
+    });
+  }
+  if (el.correctionModal) {
+    el.correctionModal.addEventListener('click', (event) => {
+      if (event.target === el.correctionModal) {
+        closeCorrectionModal();
+      }
+    });
+  }
+
+  if (el.correctionAddBtn) {
+    el.correctionAddBtn.addEventListener('click', addCorrectionFromSettings);
+  }
+  if (el.correctionAddWrong) {
+    el.correctionAddWrong.addEventListener('keydown', (event) => {
+      if (event.key === 'Enter') {
+        event.preventDefault();
+        addCorrectionFromSettings();
+      }
+    });
+  }
+  if (el.correctionAddCorrect) {
+    el.correctionAddCorrect.addEventListener('keydown', (event) => {
+      if (event.key === 'Enter') {
+        event.preventDefault();
+        addCorrectionFromSettings();
+      }
+    });
+  }
 }
 
 function summarizeReleaseNotes(notes) {
@@ -1379,6 +1685,7 @@ function updateInstructionText() {
 
 async function init() {
   bindUpdateBannerActions();
+  bindCorrectionActions();
 
   // Global shortcut event from Rust
   if (listen) {
@@ -1479,7 +1786,8 @@ async function init() {
   }
 
   // Load Config
-  loadConfig();
+  await loadConfig();
+  await loadCorrections();
 
   // Load Auto Copy
   const savedAutoCopy = localStorage.getItem('aitotype_autocopy');

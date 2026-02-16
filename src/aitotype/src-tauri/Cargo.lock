@@ -21,6 +21,7 @@ dependencies = [
 name = "aitotype"
 version = "0.1.0"
 dependencies = [
+ "aho-corasick",
  "arboard",
  "async-trait",
  "base64 0.22.1",

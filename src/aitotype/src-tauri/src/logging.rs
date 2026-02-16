@@ -2,6 +2,7 @@
 //!
 //! 记录每次转写与润色结果，按天写入 JSON 文件。
 
+use crate::corrections::CorrectionHit;
 use chrono::Local;
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
@@ -14,6 +15,12 @@ pub struct TranscribeLogEntry {
     pub stt_provider: String,
     pub stt_model: String,
     pub stt_text: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub pre_correction_text: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub post_correction_text: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub correction_hits: Option<Vec<CorrectionHit>>,
     pub enhancement_enabled: bool,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub enhancement_provider: Option<String>,
