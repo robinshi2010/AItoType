@@ -16,6 +16,9 @@
 !/docs/
 !/docs/**
 
+# Project memory (local only, not for public repo)
+docs/memory.md
+
 # Never track local secrets or machine-specific artifacts
 .env
 .env.*

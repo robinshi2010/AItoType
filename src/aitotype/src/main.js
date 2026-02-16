@@ -46,6 +46,8 @@ const state = {
   enhancementProvider: PROVIDER_OPENROUTER,
   enhancementFallbackHintTimer: null,
   recordMode: 'toggle',
+  updateBannerDismissed: false,
+  updateInfo: null,
   providerApiKeys: {
     [PROVIDER_OPENROUTER]: '',
     [PROVIDER_SILICONFLOW]: ''
@@ -60,6 +62,8 @@ const WAVEFORM_BARS = 28;
 const waveformHistory = Array.from({ length: WAVEFORM_BARS }, () => 0);
 let waveformIdx = 0;
 const DEFAULT_DEVICE_LABEL = 'System Default Input';
+const SKIPPED_UPDATE_VERSION_KEY = 'aitotype_skipped_version';
+const UPDATE_NOTES_SUMMARY_LENGTH = 100;
 
 // ============ Elements ============
 const el = {
@@ -75,6 +79,11 @@ const el = {
   orbWrapper: document.querySelector('.orb-wrapper'),
   statusPill: document.getElementById('status-pill'),
   instructionText: document.getElementById('instruction-text'),
+  updateBanner: document.getElementById('update-banner'),
+  updateMessage: document.getElementById('update-message'),
+  updateDownloadBtn: document.getElementById('update-download-btn'),
+  updateSkipBtn: document.getElementById('update-skip-btn'),
+  updateDismissBtn: document.getElementById('update-dismiss-btn'),
   waveformBar: document.getElementById('waveform-bar'),
   waveformCanvas: document.getElementById('waveform-canvas'),
   deviceName: document.getElementById('device-name'),
@@ -571,6 +580,82 @@ function showEnhancementFallbackHint(reason) {
     el.enhancementFallbackHint.classList.add('hidden');
     state.enhancementFallbackHintTimer = null;
   }, 4200);
+}
+
+function summarizeReleaseNotes(notes) {
+  const normalized = String(notes || '').replace(/\s+/g, ' ').trim();
+  if (!normalized) return '';
+  return normalized.length > UPDATE_NOTES_SUMMARY_LENGTH
+    ? `${normalized.slice(0, UPDATE_NOTES_SUMMARY_LENGTH)}...`
+    : normalized;
+}
+
+function hideUpdateBanner() {
+  if (!el.updateBanner) return;
+  el.updateBanner.classList.add('hidden');
+}
+
+function showUpdateBanner(payload) {
+  if (!el.updateBanner || !el.updateMessage) return;
+  if (state.updateBannerDismissed) return;
+
+  const latestVersion = String(payload?.latest_version || '').trim();
+  if (!latestVersion) return;
+
+  const skippedVersion = localStorage.getItem(SKIPPED_UPDATE_VERSION_KEY);
+  if (skippedVersion === latestVersion) return;
+
+  state.updateInfo = {
+    current_version: String(payload?.current_version || '').trim(),
+    latest_version: latestVersion,
+    release_notes: String(payload?.release_notes || ''),
+    release_url: String(payload?.release_url || '').trim()
+  };
+
+  const summary = summarizeReleaseNotes(state.updateInfo.release_notes);
+  el.updateMessage.textContent = summary
+    ? `v${latestVersion} available - ${summary}`
+    : `v${latestVersion} available`;
+  el.updateBanner.classList.remove('hidden');
+}
+
+function bindUpdateBannerActions() {
+  if (el.updateDownloadBtn) {
+    el.updateDownloadBtn.addEventListener('click', async () => {
+      const releaseUrl = state.updateInfo?.release_url || '';
+      if (!releaseUrl) return;
+      try {
+        await invoke('open_external_link', { url: releaseUrl });
+      } catch (e) {
+        console.error('Open release url failed', e);
+      }
+    });
+  }
+
+  if (el.updateSkipBtn) {
+    el.updateSkipBtn.addEventListener('click', () => {
+      const latestVersion = state.updateInfo?.latest_version || '';
+      if (latestVersion) {
+        localStorage.setItem(SKIPPED_UPDATE_VERSION_KEY, latestVersion);
+      }
+      state.updateBannerDismissed = true;
+      hideUpdateBanner();
+    });
+  }
+
+  if (el.updateDismissBtn) {
+    el.updateDismissBtn.addEventListener('click', () => {
+      state.updateBannerDismissed = true;
+      hideUpdateBanner();
+    });
+  }
+}
+
+async function initUpdateListener() {
+  if (!listen) return;
+  await listen('update-available', (event) => {
+    showUpdateBanner(event?.payload || {});
+  });
 }
 
 // ============ History ============
@@ -1293,8 +1378,12 @@ function updateInstructionText() {
 }
 
 async function init() {
+  bindUpdateBannerActions();
+
   // Global shortcut event from Rust
   if (listen) {
+    await initUpdateListener();
+
     state.shortcutUnlisten = await listen('toggle-recording-event', (event) => {
       if (state.shortcutCaptureActive) return;
       const payload = event?.payload || {};

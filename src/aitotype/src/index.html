@@ -36,6 +36,17 @@
 
   <!-- Main Spatial Container -->
   <main class="spatial-stage">
+    <div id="update-banner" class="update-banner hidden" role="status" aria-live="polite">
+      <div class="update-content">
+        <span class="update-icon" aria-hidden="true">🆕</span>
+        <span id="update-message">New version available</span>
+      </div>
+      <div class="update-actions">
+        <button type="button" id="update-download-btn" class="btn-primary-sm">View Update</button>
+        <button type="button" id="update-skip-btn" class="btn-text-sm">Skip</button>
+        <button type="button" id="update-dismiss-btn" class="btn-text-sm" aria-label="Dismiss update notice">✕</button>
+      </div>
+    </div>
 
     <!-- View: Recorder -->
     <section id="view-record" class="spatial-view active">

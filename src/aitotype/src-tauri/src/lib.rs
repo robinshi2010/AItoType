@@ -10,15 +10,18 @@ mod keyboard;
 mod logging;
 mod stt;
 
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Mutex;
+use std::time::Duration;
 use stt::SttConfig;
 use tauri::{Emitter, State};
 use tauri_plugin_global_shortcut::GlobalShortcutExt;
 
 const LEGACY_ENHANCEMENT_OPENROUTER_MODEL: &str = "google/gemini-2.0-flash-001";
 const LEGACY_ENHANCEMENT_PROGRAMMER_PROMPT: &str = "你是程序员语音转文字的润色助手。请按规则处理文本：\n1) 去除口头禅、重复词和无意义停顿词；\n2) 修正技术术语、产品名、代码相关拼写错误；\n3) 保留原意，不扩写、不总结、不补充新信息；\n4) 仅做必要标点与断句优化；\n5) 只输出润色后的最终文本，不要任何解释。\n\n原文：\n{text}";
+const GITHUB_RELEASE_LATEST_API: &str =
+    "https://api.github.com/repos/robinshi2010/AItoType/releases/latest";
 
 fn load_env_files() {
     static INIT: std::sync::Once = std::sync::Once::new();
@@ -160,6 +163,122 @@ struct EnhancementFallbackEventPayload {
     reason: String,
 }
 
+#[derive(Clone, Serialize)]
+struct UpdateAvailablePayload {
+    current_version: String,
+    latest_version: String,
+    release_notes: String,
+    release_url: String,
+}
+
+#[derive(Debug, Deserialize)]
+struct GitHubRelease {
+    tag_name: String,
+    body: Option<String>,
+    html_url: String,
+}
+
+fn parse_version_number(version: &str) -> [u32; 3] {
+    let cleaned = version.trim().trim_start_matches(['v', 'V']);
+    let mut values = [0_u32, 0_u32, 0_u32];
+    for (idx, segment) in cleaned.split('.').take(3).enumerate() {
+        let digits: String = segment
+            .chars()
+            .take_while(|ch| ch.is_ascii_digit())
+            .collect();
+        values[idx] = digits.parse::<u32>().unwrap_or(0);
+    }
+    values
+}
+
+fn is_newer_version(latest: &str, current: &str) -> bool {
+    let latest_parts = parse_version_number(latest);
+    let current_parts = parse_version_number(current);
+    latest_parts > current_parts
+}
+
+async fn fetch_update_payload(app: &tauri::AppHandle) -> Option<UpdateAvailablePayload> {
+    tokio::time::sleep(Duration::from_secs(3)).await;
+
+    let current_version = app.config().version.clone().unwrap_or_default();
+    if current_version.trim().is_empty() {
+        return None;
+    }
+
+    let client = reqwest::Client::builder()
+        .timeout(Duration::from_secs(10))
+        .user_agent("AItoType")
+        .build()
+        .ok()?;
+
+    let response = client
+        .get(GITHUB_RELEASE_LATEST_API)
+        .header("Accept", "application/vnd.github+json")
+        .send()
+        .await
+        .ok()?;
+
+    if !response.status().is_success() {
+        return None;
+    }
+
+    let release: GitHubRelease = response.json().await.ok()?;
+    let latest_version = release.tag_name.trim().trim_start_matches(['v', 'V']).to_string();
+    if latest_version.is_empty() || !is_newer_version(&latest_version, &current_version) {
+        return None;
+    }
+
+    Some(UpdateAvailablePayload {
+        current_version,
+        latest_version,
+        release_notes: release.body.unwrap_or_default(),
+        release_url: release.html_url,
+    })
+}
+
+async fn check_for_updates(app: tauri::AppHandle) {
+    if let Some(payload) = fetch_update_payload(&app).await {
+        let _ = app.emit("update-available", payload);
+    }
+}
+
+fn open_external_url(url: &str) -> Result<(), String> {
+    let target = url.trim();
+    if !(target.starts_with("http://") || target.starts_with("https://")) {
+        return Err("仅支持 http/https 链接".to_string());
+    }
+
+    #[cfg(target_os = "macos")]
+    let mut command = {
+        let mut cmd = std::process::Command::new("open");
+        cmd.arg(target);
+        cmd
+    };
+
+    #[cfg(target_os = "windows")]
+    let mut command = {
+        let mut cmd = std::process::Command::new("explorer");
+        cmd.arg(target);
+        cmd
+    };
+
+    #[cfg(all(unix, not(target_os = "macos")))]
+    let mut command = {
+        let mut cmd = std::process::Command::new("xdg-open");
+        cmd.arg(target);
+        cmd
+    };
+
+    let status = command
+        .status()
+        .map_err(|e| format!("打开链接失败: {:?}", e))?;
+    if status.success() {
+        Ok(())
+    } else {
+        Err(format!("打开链接失败，退出码: {:?}", status.code()))
+    }
+}
+
 fn parse_typed_error(input: &str) -> (String, String) {
     if let Some((error_type, message)) = input.split_once('|') {
         return (error_type.to_string(), message.to_string());
@@ -233,6 +352,17 @@ fn get_log_dir_path(app: tauri::AppHandle) -> Result<String, String> {
 #[tauri::command]
 fn open_log_dir(app: tauri::AppHandle) -> Result<(), String> {
     logging::open_log_dir(&app)
+}
+
+#[tauri::command]
+async fn check_update_now(app: tauri::AppHandle) -> Result<(), String> {
+    check_for_updates(app).await;
+    Ok(())
+}
+
+#[tauri::command]
+fn open_external_link(url: String) -> Result<(), String> {
+    open_external_url(&url)
 }
 
 /// 转录音频文件
@@ -507,8 +637,8 @@ fn show_overlay_status(app: tauri::AppHandle, status: String) -> Result<(), Stri
         .get_webview_window("overlay")
         .ok_or_else(|| "overlay window not found".to_string())?;
 
-    const OVERLAY_LOGICAL_WIDTH: f64 = 334.0;
-    const OVERLAY_LOGICAL_HEIGHT: f64 = 86.0;
+    const OVERLAY_LOGICAL_WIDTH: f64 = 358.0;
+    const OVERLAY_LOGICAL_HEIGHT: f64 = 110.0;
     const OVERLAY_BOTTOM_MARGIN: i32 = 280;
 
     let _ = overlay.set_size(tauri::Size::Logical(tauri::LogicalSize::new(
@@ -731,7 +861,7 @@ pub fn run() {
             // 预热 overlay 窗口，避免首次通过快捷键唤起时出现初始化卡顿。
             if let Some(overlay) = app.get_webview_window("overlay") {
                 let _ =
-                    overlay.set_size(tauri::Size::Logical(tauri::LogicalSize::new(334.0, 86.0)));
+                    overlay.set_size(tauri::Size::Logical(tauri::LogicalSize::new(358.0, 110.0)));
                 let _ = overlay.show();
                 let _ = overlay.hide();
             }
@@ -805,6 +935,11 @@ pub fn run() {
                 }
             }
 
+            let app_handle = app.handle().clone();
+            tauri::async_runtime::spawn(async move {
+                check_for_updates(app_handle).await;
+            });
+
             Ok(())
         })
         .manage(AppState::default())
@@ -816,6 +951,8 @@ pub fn run() {
             get_input_device_name,
             get_log_dir_path,
             open_log_dir,
+            check_update_now,
+            open_external_link,
             transcribe_audio,
             stop_and_transcribe,
             type_text,
