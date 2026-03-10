@@ -32,11 +32,17 @@ function resolveCommand(command) {
   return command;
 }
 
+function usesWindowsShellShim(command) {
+  return process.platform === 'win32' && (command === 'npm' || command === 'npx');
+}
+
 function run(command, args, options = {}) {
-  const resolvedCommand = resolveCommand(command);
+  const useShell = usesWindowsShellShim(command);
+  const resolvedCommand = useShell ? command : resolveCommand(command);
   const result = spawnSync(resolvedCommand, args, {
     cwd: appRoot,
     stdio: 'inherit',
+    shell: useShell,
     ...options,
   });
 
