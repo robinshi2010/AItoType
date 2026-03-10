@@ -1,14 +1,29 @@
-const { invoke } = window.__TAURI__.core || { invoke: async () => '' };
-const { listen } = window.__TAURI__.event || { listen: async () => () => { } };
+const { invoke } = window.__TAURI__?.core || { invoke: async () => '' };
+const { listen } = window.__TAURI__?.event || { listen: async () => () => { } };
 
 const pill = document.getElementById('overlay-pill');
 const statusText = document.getElementById('status-text');
 const statusSubtext = document.getElementById('status-subtext');
 const waveformBars = Array.from(document.querySelectorAll('.overlay-waveform .bar'));
 
-let overlayLevelTimer = null;
+let overlayLevelPollTimer = null;
+let overlayRenderFrame = null;
 let currentStatus = 'recording';
 let currentDeviceName = '';
+let targetAudioLevel = 0;
+let visualAudioLevel = 0;
+
+function normalizeWaveLevel(level) {
+  const safeLevel = Number.isFinite(level) ? Math.max(0, Math.min(1, level)) : 0;
+  const boosted = Math.min(1, Math.pow(safeLevel, 0.58) * 1.45);
+  const threshold = 0.12;
+
+  if (boosted <= threshold) {
+    return 0;
+  }
+
+  return Math.min(1, (boosted - threshold) / (1 - threshold));
+}
 
 function updateSubtext() {
   if (!statusSubtext) return;
@@ -36,32 +51,69 @@ async function queryAndShowDevice() {
 }
 
 function startOverlayAnim() {
-  if (overlayLevelTimer || waveformBars.length === 0) return;
+  if ((overlayLevelPollTimer || overlayRenderFrame) || waveformBars.length === 0) return;
 
-  overlayLevelTimer = setInterval(async () => {
+  overlayLevelPollTimer = setInterval(async () => {
     try {
       const level = Number(await invoke('get_audio_level'));
-      const safeLevel = Number.isFinite(level) ? Math.max(0, Math.min(1, level)) : 0;
-      const tick = Date.now() / 160;
-
-      waveformBars.forEach((bar, index) => {
-        const wave = 0.82 + Math.sin(tick + index * 1.1) * 0.18;
-        const height = Math.max(4, Math.min(24, 4 + safeLevel * 20 * wave));
-        bar.style.height = `${height.toFixed(1)}px`;
-        bar.style.opacity = `${(0.35 + safeLevel * 0.65).toFixed(3)}`;
-      });
+      targetAudioLevel = normalizeWaveLevel(level);
     } catch (_) { }
-  }, 80);
+  }, 60);
+
+  const render = () => {
+    const desiredLevel = currentStatus === 'recording' ? targetAudioLevel : 0;
+    const smoothing = desiredLevel > visualAudioLevel ? 0.34 : 0.14;
+    visualAudioLevel += (desiredLevel - visualAudioLevel) * smoothing;
+
+    const tick = performance.now() / 150;
+    const barCount = Math.max(1, waveformBars.length - 1);
+    const isSilent = visualAudioLevel < 0.018;
+
+    waveformBars.forEach((bar, index) => {
+      if (isSilent) {
+        bar.style.height = '6px';
+        bar.style.opacity = '0.3';
+        return;
+      }
+
+      const centerBias = 1 - Math.abs(index - barCount / 2) / Math.max(1, barCount / 2);
+      const envelope = 0.7 + centerBias * 0.55;
+      const ripple =
+        Math.sin(tick + index * 0.72) * 0.42 +
+        Math.sin(tick * 1.9 + index * 1.37) * 0.33 +
+        Math.sin(tick * 3.1 - index * 0.58) * 0.14;
+      const pulse = Math.max(0, Math.sin(tick * 2.4 + index * 0.64));
+      const motion = 0.58 + ripple * 0.38 + pulse * 0.22;
+      const intensity = visualAudioLevel;
+      const height = 6 + envelope * 5 + intensity * (10 + motion * 22);
+      const opacity = 0.34 + intensity * 0.66;
+
+      bar.style.height = `${height.toFixed(1)}px`;
+      bar.style.opacity = `${opacity.toFixed(3)}`;
+    });
+
+    overlayRenderFrame = requestAnimationFrame(render);
+  };
+
+  overlayRenderFrame = requestAnimationFrame(render);
 }
 
 function stopOverlayAnim() {
-  if (overlayLevelTimer) {
-    clearInterval(overlayLevelTimer);
-    overlayLevelTimer = null;
+  if (overlayLevelPollTimer) {
+    clearInterval(overlayLevelPollTimer);
+    overlayLevelPollTimer = null;
   }
 
+  if (overlayRenderFrame) {
+    cancelAnimationFrame(overlayRenderFrame);
+    overlayRenderFrame = null;
+  }
+
+  targetAudioLevel = 0;
+  visualAudioLevel = 0;
+
   waveformBars.forEach((bar) => {
-    bar.style.height = '4px';
+    bar.style.height = '6px';
     bar.style.opacity = '';
   });
 }

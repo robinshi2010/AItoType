@@ -171,20 +171,30 @@ body {
 
 .overlay-waveform {
   display: flex;
-  align-items: center;
+  align-items: flex-end;
   justify-content: center;
-  gap: 3px;
+  gap: 4px;
   margin-left: 8px;
-  min-width: 30px;
+  min-width: 56px;
+  height: 34px;
 }
 
 .overlay-waveform .bar {
-  width: 3px;
-  height: 4px;
+  width: 4px;
+  height: 6px;
   border-radius: 999px;
-  background: linear-gradient(180deg, rgba(119, 201, 255, 0.95), rgba(17, 163, 255, 0.8));
-  box-shadow: 0 0 10px rgba(17, 163, 255, 0.35);
-  transition: height 0.08s linear, opacity 0.12s ease;
+  background:
+    linear-gradient(180deg, rgba(223, 245, 255, 0.96), rgba(107, 205, 255, 0.95) 30%, rgba(17, 163, 255, 0.78));
+  box-shadow:
+    0 0 10px rgba(17, 163, 255, 0.35),
+    0 0 20px rgba(17, 163, 255, 0.18);
+  will-change: height, opacity;
+  transform-origin: center bottom;
+}
+
+.overlay-waveform .bar:nth-child(3n) {
+  background:
+    linear-gradient(180deg, rgba(240, 249, 255, 0.98), rgba(137, 218, 255, 0.95) 28%, rgba(37, 169, 255, 0.82));
 }
 
 .overlay-pill.transcribing .overlay-waveform {

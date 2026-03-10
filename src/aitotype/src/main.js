@@ -62,6 +62,7 @@ const state = {
 const WAVEFORM_BARS = 28;
 const waveformHistory = Array.from({ length: WAVEFORM_BARS }, () => 0);
 let waveformIdx = 0;
+let waveformVisualLevel = 0;
 const DEFAULT_DEVICE_LABEL = 'System Default Input';
 const SKIPPED_UPDATE_VERSION_KEY = 'aitotype_skipped_version';
 const UPDATE_NOTES_SUMMARY_LENGTH = 100;
@@ -454,10 +455,23 @@ async function stopAndTranscribeOnly() {
 function resetWaveform() {
   waveformHistory.fill(0);
   waveformIdx = 0;
+  waveformVisualLevel = 0;
   if (!el.waveformCanvas) return;
   const ctx = el.waveformCanvas.getContext('2d');
   if (!ctx) return;
   ctx.clearRect(0, 0, el.waveformCanvas.width, el.waveformCanvas.height);
+}
+
+function normalizeWaveLevel(level) {
+  const safeLevel = Number.isFinite(level) ? Math.max(0, Math.min(1, level)) : 0;
+  const boosted = Math.min(1, Math.pow(safeLevel, 0.58) * 1.45);
+  const threshold = 0.12;
+
+  if (boosted <= threshold) {
+    return 0;
+  }
+
+  return Math.min(1, (boosted - threshold) / (1 - threshold));
 }
 
 function drawWaveform(level) {
@@ -480,12 +494,15 @@ function drawWaveform(level) {
   for (let i = 0; i < WAVEFORM_BARS; i++) {
     const idx = (waveformIdx + i) % WAVEFORM_BARS;
     const value = waveformHistory[idx];
-    const barHeight = Math.max(2, Math.round(2 + value * (height - 4)));
+    const easedValue = Math.pow(value, 0.82);
+    const barHeight = value <= 0.001
+      ? 2
+      : Math.max(3, Math.round(3 + easedValue * (height - 6)));
     const x = i * (barWidth + gap);
     const y = Math.round((height - barHeight) / 2);
-    const alpha = 0.26 + value * 0.64;
+    const alpha = value <= 0.001 ? 0.18 : 0.3 + easedValue * 0.7;
 
-    ctx.fillStyle = `rgba(10, 132, 255, ${alpha.toFixed(3)})`;
+    ctx.fillStyle = `rgba(60, 170, 255, ${alpha.toFixed(3)})`;
     if (typeof ctx.roundRect === 'function') {
       ctx.beginPath();
       ctx.roundRect(x, y, barWidth, barHeight, 2);
@@ -523,19 +540,22 @@ function startAudioAnim() {
 
     try {
       const level = Number(await invoke('get_audio_level'));
-      const safeLevel = Number.isFinite(level) ? Math.max(0, Math.min(1, level)) : 0;
-      const scale = 1 + safeLevel * 0.14;
-      const glowSize = 18 + safeLevel * 34;
-      const glowAlpha = 0.2 + safeLevel * 0.45;
+      const normalizedLevel = normalizeWaveLevel(level);
+      const smoothing = normalizedLevel > waveformVisualLevel ? 0.36 : 0.14;
+      waveformVisualLevel += (normalizedLevel - waveformVisualLevel) * smoothing;
+
+      const scale = 1 + waveformVisualLevel * 0.18;
+      const glowSize = 18 + waveformVisualLevel * 42;
+      const glowAlpha = 0.18 + waveformVisualLevel * 0.58;
 
       el.recordTrigger.style.transform = `scale(${scale.toFixed(3)})`;
       el.recordTrigger.style.boxShadow = `
-        inset 0 0 ${12 + safeLevel * 24}px rgba(255, 255, 255, ${0.06 + safeLevel * 0.14}),
-        inset 0 0 ${4 + safeLevel * 10}px rgba(255, 255, 255, ${0.12 + safeLevel * 0.18}),
+        inset 0 0 ${12 + waveformVisualLevel * 28}px rgba(255, 255, 255, ${0.06 + waveformVisualLevel * 0.14}),
+        inset 0 0 ${4 + waveformVisualLevel * 12}px rgba(255, 255, 255, ${0.12 + waveformVisualLevel * 0.2}),
         0 18px 40px rgba(0, 0, 0, 0.4),
         0 0 ${glowSize.toFixed(1)}px rgba(10, 132, 255, ${glowAlpha.toFixed(3)})
       `;
-      drawWaveform(safeLevel);
+      drawWaveform(waveformVisualLevel);
     } catch (_) { }
   }, 80);
 }
