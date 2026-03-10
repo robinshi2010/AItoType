@@ -124,13 +124,22 @@ xattr -dr com.apple.quarantine /Applications/AItoType.app
 ```bash
 cd src/aitotype
 npm install
-npm run tauri build
+npm run build
 ```
 
 主要产物目录：
 
 - `.app`: `src/aitotype/src-tauri/target/release/bundle/macos/`
 - `.dmg`: `src/aitotype/src-tauri/target/release/bundle/dmg/`
+
+在 macOS 上，仓库内置的打包脚本会在 Tauri 构建后自动校验 `.app` 的 bundle 签名；如果检测到无效签名，会自动执行一次 ad-hoc `codesign` 并重新封装 `dmg`，避免产出 Finder 提示“已损坏”的安装包。
+
+如果你已经下载了旧的损坏版本并安装到 `/Applications/AItoType.app`，可先执行：
+
+```bash
+codesign --force --deep --sign - /Applications/AItoType.app
+xattr -dr com.apple.quarantine /Applications/AItoType.app
+```
 
 ## ⚙️ 配置指南
 
