@@ -24,25 +24,45 @@ const bundleDir = path.join(tauriDir, 'target', 'release', 'bundle');
 const extraArgs = process.argv.slice(2);
 const tempPathsToClean = [];
 
+function resolveCommand(command) {
+  if (process.platform === 'win32' && (command === 'npm' || command === 'npx')) {
+    return `${command}.cmd`;
+  }
+
+  return command;
+}
+
 function run(command, args, options = {}) {
-  const result = spawnSync(command, args, {
+  const resolvedCommand = resolveCommand(command);
+  const result = spawnSync(resolvedCommand, args, {
     cwd: appRoot,
     stdio: 'inherit',
     ...options,
   });
 
+  if (result.error) {
+    throw result.error;
+  }
+
   if (result.status !== 0) {
     const joinedArgs = args.join(' ');
-    throw new Error(`Command failed: ${command} ${joinedArgs}`);
+    throw new Error(`Command failed: ${resolvedCommand} ${joinedArgs}`);
   }
 }
 
 function runCapture(command, args) {
-  return spawnSync(command, args, {
+  const resolvedCommand = resolveCommand(command);
+  const result = spawnSync(resolvedCommand, args, {
     cwd: appRoot,
     encoding: 'utf8',
     stdio: ['ignore', 'pipe', 'pipe'],
   });
+
+  if (result.error) {
+    throw result.error;
+  }
+
+  return result;
 }
 
 function findSingleBundleEntry(directory, suffix, kind) {
